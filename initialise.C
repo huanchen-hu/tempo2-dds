@@ -196,7 +196,7 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     psr->TNRedGam = 0;
     psr->TNRedC = 0;
     psr->TNRedFLow=0;
-    psr->TNRedCorner=0.01;
+    psr->TNRedCorner=0.0;
     psr->TNDMAmp = 0;
     psr->TNDMGam = 0;
     psr->TNDMC = 0;
@@ -212,12 +212,16 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     psr->TNsubtractDM=0;
     psr->TNsubtractRed=0;
     psr->TNsubtractChrom=0;
+    psr->TN_QpRatio=0;
+    psr->TN_QpPeriod=0;
+    psr->TN_QpSig=0;
+    psr->TN_QpLam=0;
     psr->AverageResiduals=0;
     psr->useTNOrth = 0;
     psr->nDMEvents=0;
     psr->nTNShapeletEvents=0;
     psr->sorted=0;
-    psr->detUinv=0;
+    psr->detL=0;
     allocateMemory(psr,0);
     /*  psr->param[param_track].paramSet[0]=1;
         psr->param[param_track].val[0]=0.0;
@@ -295,6 +299,11 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     strcpy(psr->param[param_daop].label[0],"IPERHARM");
     strcpy(psr->param[param_daop].shortlabel[0],"IPERHARM");
     strcpy(psr->param[param_pmrv].label[0],"PMRV (mas/yr)"); strcpy(psr->param[param_pmrv].shortlabel[0],"PMRV");
+    for (k=0;k<psr->param[param_dphaseplanet].aSize;k++)
+    {
+        sprintf(psr->param[param_dphaseplanet].label[k], "DPHASEPLANET%d ", k+1);
+        sprintf(psr->param[param_dphaseplanet].shortlabel[k], "DPHASEPLANET%d", k+1);
+    }
     for (k=0;k<psr->param[param_dmassplanet].aSize;k++)
     {
         sprintf(psr->param[param_dmassplanet].label[k], "DMASSPLANET%d (Msun)", k+1);
@@ -432,10 +441,22 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
         strcpy(psr->param[param_glf2].shortlabel[k],temp);
         sprintf(temp,"GLF0D_%d",k+1);
         strcpy(psr->param[param_glf0d].label[k],temp);
-	strcpy(psr->param[param_glf0d].shortlabel[k],temp);
+        strcpy(psr->param[param_glf0d].shortlabel[k],temp);
         sprintf(temp,"GLTD_%d",k+1);
         strcpy(psr->param[param_gltd].label[k],temp);
         strcpy(psr->param[param_gltd].shortlabel[k],temp);
+        sprintf(temp,"GLF0D2_%d",k+1);
+        strcpy(psr->param[param_glf0d2].label[k],temp);
+        strcpy(psr->param[param_glf0d2].shortlabel[k],temp);
+        sprintf(temp,"GLTD2_%d",k+1);
+        strcpy(psr->param[param_gltd2].label[k],temp);
+        strcpy(psr->param[param_gltd2].shortlabel[k],temp);
+        sprintf(temp,"GLF0D3_%d",k+1);
+        strcpy(psr->param[param_glf0d3].label[k],temp);
+        strcpy(psr->param[param_glf0d3].shortlabel[k],temp);
+        sprintf(temp,"GLTD3_%d",k+1);
+        strcpy(psr->param[param_gltd3].label[k],temp);
+        strcpy(psr->param[param_gltd3].shortlabel[k],temp);
         sprintf(temp,"SWITCH_%d",k+1);
         strcpy(psr->param[param_stateSwitchT].label[k],temp);
         strcpy(psr->param[param_stateSwitchT].shortlabel[k],temp);
@@ -596,6 +617,12 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     strcpy( psr->param[param_ne_sw].label[0], "NE_SW (cm^-3)" );
     strcpy( psr->param[param_ne_sw].shortlabel[0], "NE_SW" );
 
+    strcpy( psr->param[param_ne_sw_sin].label[0], "NE_SW_SIN (cm^-3)" );
+    strcpy( psr->param[param_ne_sw_sin].shortlabel[0], "NE_SW_SIN" );
+
+    strcpy( psr->param[param_ne_sw_ifunc].label[0], "NE_SW_IFUNC" );
+    strcpy( psr->param[param_ne_sw_ifunc].shortlabel[0], "NE_SW_IFUNC" );
+
     for (k=0;k<psr->param[param_bpjep].aSize;k++)
     {
         sprintf(temp,"BPJEP_%d",k+1);
@@ -700,10 +727,12 @@ void allocateMemory(pulsar *psr, int realloc)
         else if (i==param_bpjep || i==param_bpjph || i==param_bpja1 || i==param_bpjec || i==param_bpjom
                 || i==param_bpjpb)  psr->param[i].aSize = MAX_BPJ_JUMPS;
         else if (i==param_glep || i==param_glph || i==param_glf0 || i==param_glf1 || i==param_stateSwitchT || i==param_glf2 || 
-                i==param_glf0d || i==param_gltd) psr->param[i].aSize = 40;
+                i==param_glf0d || i==param_gltd || i==param_glf0d2 || i==param_glf0d3 || i==param_gltd2 || i==param_gltd3) psr->param[i].aSize = 40;
 	 else if (i==param_expep || i==param_expph || i==param_exptau || i==param_expindex) psr->param[i].aSize = 40;
         else if (i==param_gausep || i==param_gausamp || i==param_gaussig || i==param_gausindex) psr->param[i].aSize = 40;
         else if (i==param_dmassplanet)
+            psr->param[i].aSize = 9;
+        else if (i==param_dphaseplanet)
             psr->param[i].aSize = 9;
         else if (i==param_dmx || i==param_dmxr1 || i==param_dmxr2)
             psr->param[i].aSize = MAX_DMX;

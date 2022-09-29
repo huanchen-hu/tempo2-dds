@@ -241,8 +241,9 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
             strcasecmp(str,"SOLARN0")==0){
             readValue( psr, str, fin, &( psr->param[param_ne_sw] ), 0 );
             psr->ne_sw = psr->param[param_ne_sw].val[0];
-            // fitting for NE_SW breaks if it is zero, so set to negligable value
-            if (psr->ne_sw < 1e-20)psr->ne_sw = 1e-20;
+    }
+    else if (strcasecmp(str,"NE_SW_SIN")==0) {
+            readValue( psr, str, fin, &( psr->param[param_ne_sw_sin] ), 0 );
     }
     else if (strcasecmp(str, "TIMEEPH")==0)
     {
@@ -397,7 +398,7 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
     else if (strcasecmp(str,"AVERAGERES") ==0)
       {
 	psr->AverageResiduals=1;
-	fscanf(fin,"%s %f", &psr->AverageFlag, &psr->AverageEpochWidth);
+	fscanf(fin,"%s %f", psr->AverageFlag, &psr->AverageEpochWidth);
       }
     else if (strcasecmp(str,"EPH_FILE")==0)
     {
@@ -600,6 +601,25 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         }
 
     }
+    else if (strstr(str,"GLF0D2_")!=NULL || strstr(str,"glf0d_")!=NULL)
+    {
+        if (sscanf(str+7,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_glf0d2].aSize)
+                readValue(psr,str,fin,&(psr->param[param_glf0d2]),gval-1);
+        }
+
+    }
+    else if (strstr(str,"GLF0D3_")!=NULL || strstr(str,"glf0d_")!=NULL)
+    {
+        if (sscanf(str+7,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_glf0d3].aSize)
+                readValue(psr,str,fin,&(psr->param[param_glf0d3]),gval-1);
+        }
+
+    }
+
     else if (strstr(str,"GLTD_")!=NULL || strstr(str,"gltd_")!=NULL)
     {
         if (sscanf(str+5,"%d",&gval)==1)
@@ -608,12 +628,27 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
                 readValue(psr,str,fin,&(psr->param[param_gltd]),gval-1);
         }
     }
+    else if (strstr(str,"GLTD2_")!=NULL || strstr(str,"gltd_")!=NULL)
+    {
+        if (sscanf(str+6,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_gltd2].aSize)
+                readValue(psr,str,fin,&(psr->param[param_gltd2]),gval-1);
+        }
+    }
+    else if (strstr(str,"GLTD3_")!=NULL || strstr(str,"gltd_")!=NULL)
+    {
+        if (sscanf(str+6,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_gltd3].aSize)
+                readValue(psr,str,fin,&(psr->param[param_gltd3]),gval-1);
+        }
+    }
 
     else if  (strstr(str,"EXPEP_")!=NULL || strstr(str,"expep_")!=NULL)
     {
         if (sscanf(str+6,"%d",&gval)==1)
         {
-	  
             if (gval<psr->param[param_expep].aSize)
                 readValue(psr,str,fin,&(psr->param[param_expep]),gval-1);
         }
@@ -1063,6 +1098,23 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
             exit(1);
         }
     }
+    else if (strcasecmp(str,"NE_SW_IFUNC")==0) {
+        readValue(psr,str,fin,&(psr->param[param_ne_sw_ifunc]),0);
+    }
+    else if (strcasecmp(str,"_NE_SW")==0) {
+        int ni = psr->ne_sw_ifuncN;
+        double mjd, val, err;
+        err=0;
+        fscanf(fin,"%lf %lf %lf",&mjd,&val,&err);
+        psr->ne_sw_ifuncT[ni] = mjd;
+        psr->ne_sw_ifuncV[ni] = val;
+        psr->ne_sw_ifuncE[ni] = err;
+        (psr->ne_sw_ifuncN)++;
+        if (psr->ne_sw_ifuncN > MAX_IFUNC){
+            logerr("Too many NE_SW_IFUNC entries!");
+            exit(1);
+        }
+    }
 
     else if (strcasecmp(str,"CONSTRAINT_EFACTOR")==0){
         fscanf(fin, "%lg",&psr->constraint_efactor);
@@ -1084,6 +1136,23 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
             strcpy(psr->constraint_special[psr->nconstraints],txt);
             psr->nconstraints++;
         }
+        if((strcasecmp(cname,"NE_SW_IFUNC_SIN")==0)){
+            char* txt = fgets(cname, 1024,fin);
+            psr->constraints[psr->nconstraints] = constraint_ne_sw_ifunc_sin;
+            psr->constraint_special[psr->nconstraints] = (char*)malloc(strlen(txt)+2);
+            strcpy(psr->constraint_special[psr->nconstraints],txt);
+            psr->nconstraints++;
+        }
+        if((strcasecmp(cname,"NE_SW_IFUNC_SIGMA")==0)){
+            char* txt = fgets(cname, 1024,fin);
+            psr->constraints[psr->nconstraints] = constraint_ne_sw_ifunc_sigma;
+            psr->constraint_special[psr->nconstraints] = (char*)malloc(strlen(txt)+2);
+            strcpy(psr->constraint_special[psr->nconstraints],txt);
+            psr->nconstraints++;
+        }
+
+
+
         if((strcasecmp(cname,"IFUNC_COV")==0)){
             // read the line into the special constraint
             char* txt = fgets(cname, 1024,fin);
@@ -1610,6 +1679,15 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         fscanf(fin,"%d",&(psr->TNDMC));
     else if(strcasecmp(str,"TNsubtractDM")==0)
         fscanf(fin,"%d",&(psr->TNsubtractDM));
+    else if (strcasecmp(str,"TN_QpPeriod")==0) /* Quasi-periodic Timing Noise*/
+        fscanf(fin,"%lf",&(psr->TN_QpPeriod));
+    else if (strcasecmp(str,"TN_QpLam")==0) /* Quasi-periodic Timing Noise*/
+        fscanf(fin,"%lf",&(psr->TN_QpLam));
+    else if (strcasecmp(str,"TN_QpSig")==0) /* Quasi-periodic Timing Noise*/
+        fscanf(fin,"%lf",&(psr->TN_QpSig));
+    else if (strcasecmp(str,"TN_QpRatio")==0) /* Quasi-periodic Timing Noise*/
+        fscanf(fin,"%lf",&(psr->TN_QpRatio));
+
     else if (strcasecmp(str,"TNChromAmp")==0) /* TempoNest Red noise power law amplitude */
       {
 	fscanf(fin,"%lf",&(psr->TNChromAmp));
@@ -2042,7 +2120,7 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
             char buf[80];
             char sname[80];
             fgets(buf, 80,fin);
-            sscanf(buf,"%s", &sname);
+            sscanf(buf,"%s", sname);
             switch (sname[0]) {
                 case 'P':
                 case 'p':
@@ -2615,7 +2693,7 @@ void getValue(char *str,int v1,int v2,pulsar *psr,int label,int arr)
         strcpy(t1,str+v1);   t1[2]='\0';
         strcpy(t2,str+v1+2); t2[2]='\0';
         strcpy(t3,str+v1+4); t3[v2-v1-4]='\0';
-        sprintf(temp,"%s:%s:%s",t1,t2,t3);
+        snprintf(temp,1000,"%s:%s:%s",t1,t2,t3);
         temp[v2-v1+1+2]='\0';
         strcpy(psr->rajStrPre,temp);
         psr->param[label].val[arr] = turn_deg(hms_turn(temp))*M_PI/180.0;
@@ -2633,7 +2711,7 @@ void getValue(char *str,int v1,int v2,pulsar *psr,int label,int arr)
         strcpy(t2,str+v1+2); t2[2]='\0';
         strcpy(t3,str+v1+4); t3[v2-v1-4]='\0';
         psr->param[label].paramSet[arr] = 1;
-        sprintf(temp,"%s:%s:%s",t1,t2,t3);
+        snprintf(temp,1000,"%s:%s:%s",t1,t2,t3);
         temp[v2-v1+1+2]='\0';
         strcpy(psr->decjStrPre,temp);
         psr->param[label].val[arr] = turn_deg(dms_turn(temp))*M_PI/180.0;

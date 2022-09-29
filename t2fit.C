@@ -1,3 +1,4 @@
+#include "config.h"
 #include "t2fit.h"
 #include "t2fit_stdFitFuncs.h"
 #include "t2fit_nestlike.h"
@@ -5,7 +6,8 @@
 #include "constraints_nestlike.h"
 #include "constraints_param.h"
 #include "constraints_covar.h"
-#include <TKfit.h>
+
+#include "TKfit.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -114,7 +116,7 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
         int *psr_toaidx = (int*)malloc(sizeof(int)*psr[ipsr].nobs); // mapping from fit data to observation number
 
 
-        double** uinv; // the whitening matrix.
+        double** cholesky_L; // the whitening matrix.
 
         /**
          * Working out which data contributes to the fit is done in this routine.
@@ -150,7 +152,7 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
 
         /**
          * The whitening matrix behaves diferently if we have a covariance matrix.
-         * If we have a covariance matrix, uinv is an ndata x ndata triangular matrix.
+         * If we have a covariance matrix, cholesky_L is an ndata x ndata triangular matrix.
          * Otherwise, it only has diagonal elements, so we efficiently store it as 
          * a 1-d ndata array.
          */
@@ -159,15 +161,15 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
             sortToAs(psr+ipsr);
 
             // malloc_uinv does a blas-compatible allocation of a 2-d array.
-            logdbg("Create uinv array");
-            uinv = malloc_uinv(psr_ndata);
+            logdbg("Create cholesky_L array");
+            cholesky_L = malloc_uinv(psr_ndata);
             psr[ipsr].fitMode=1; // Note: forcing this to 1 as the Cholesky fit is a weighted fit
             logmsg("Doing a FULL COVARIANCE MATRIX fit");
         } else {
             // Here the whitening matrix is just a diagonal
             // weighting matrix. Store diagonal matrix as 1xN
             // so that types match later.
-            uinv=malloc_blas(1,psr_ndata); 
+            cholesky_L=malloc_blas(1,psr_ndata); 
             if(psr[ipsr].fitMode == 0){
                 // if we are doing an unweighted fit then we should set the errors to 1.0
                 // to give uniform weighting.
@@ -179,19 +181,19 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
                 logdbg("Doing a WEIGHTED fit");
             }
         }
-        assert(uinv!=NULL);
-        assert(uinv[0]!=NULL);
+        assert(cholesky_L!=NULL);
+        assert(cholesky_L[0]!=NULL);
 
         /**
-         * Now we form the whitening matrix, uinv.
+         * Now we form the whitening matrix, cholesky_L.
          * Note that getCholeskyMatrix() is clever enough to see that we 
          * have created a 1 x ndata matrix if we have only diagonal elements.
          */
-        getCholeskyMatrix(uinv,covarFuncFile,psr+ipsr,
+        getCholeskyMatrix(cholesky_L,covarFuncFile,psr+ipsr,
                 psr_x,psr_y,psr_e,
                 psr_ndata,0,psr_toaidx);
 
-        logtchk("got Uinv");
+        logtchk("got cholesky_L");
 
         // define some convinience variables
         const unsigned nParams=psr[ipsr].fitinfo.nParams;
@@ -245,22 +247,24 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
 
         /**
          * Now we multiply the design matrix and the data vector by the whitening matrix.
-         * If we just have variances (uinv is diagonal) then we do it traditionally, otherwise
+         * If we just have variances (cholesky_L is diagonal) then we do it traditionally, otherwise
          * we use TKmultMatrix as this is usually backed by LAPACK and so is fast :)
          */
         if(haveCovar){
-            TKmultMatrixVec(uinv,psr_y,psr_ndata,psr_ndata,psr_white_y);
-            TKmultMatrix_sq(uinv,designMatrix,psr_ndata,nParams,white_designMatrix);
+            logtchk("fwdSub L");
+            TKforwardSubVec(cholesky_L,psr_y,psr_ndata,psr_white_y);
+            TKforwardSub(cholesky_L,designMatrix,psr_ndata,nParams,white_designMatrix);
+            logtchk("done fwdSub L");
         } else {
             for(unsigned i=0;i<psr_ndata;++i){
-                psr_white_y[i]=psr_y[i]*uinv[0][i];
+                psr_white_y[i]=psr_y[i]/cholesky_L[0][i];
                 for(unsigned j=0;j<nParams;++j){
-                    white_designMatrix[i][j] = designMatrix[i][j]*uinv[0][i];
+                    white_designMatrix[i][j] = designMatrix[i][j]/cholesky_L[0][i];
                 }
             }
         }
 
-        free_blas(uinv);
+        free_blas(cholesky_L);
         free(psr_e);
         free(psr_toaidx);
 
@@ -614,6 +618,14 @@ unsigned int t2Fit_getFitData(pulsar *psr, double* x, double* y,
     bool finishSet = psr->param[param_finish].paramSet[0]==1 
         && psr->param[param_finish].fitFlag[0]==1;
 
+    bool bat_startSet = psr->param[param_start].paramSet[0]==1 
+        && psr->param[param_start].fitFlag[0]==2;
+    bool bat_finishSet = psr->param[param_finish].paramSet[0]==1 
+        && psr->param[param_finish].fitFlag[0]==2;
+
+    bool update_start = !(bat_startSet || startSet);
+    bool update_finish = !(bat_finishSet || finishSet);
+
     /*
      * Variables for the start/finish. Initialise to some crazy values.
      * 1e10 in MJD is about 27 million years in the future, so not likey to
@@ -623,8 +635,9 @@ unsigned int t2Fit_getFitData(pulsar *psr, double* x, double* y,
     longdouble finish = 0;
 
     // if we are fixing start/finish then use the specified values.
-    if (startSet) start = psr->param[param_start].val[0];
-    if (finishSet) finish = psr->param[param_finish].val[0];
+    if (startSet||bat_startSet) start = psr->param[param_start].val[0];
+    if (finishSet||bat_finishSet) finish = psr->param[param_finish].val[0];
+    logmsg("ss/fs %d %d",startSet,finishSet);
     for (iobs=0; iobs < psr->nobs; ++iobs){
         // a convinience pointer for the current observation.
         observation *o = psr->obsn+iobs;
@@ -638,9 +651,12 @@ unsigned int t2Fit_getFitData(pulsar *psr, double* x, double* y,
         if (startSet && o->sat < (start-START_FINISH_DELTA)) continue;
         if (finishSet && o->sat > (finish+START_FINISH_DELTA)) continue;
 
+        if (bat_startSet && o->bat < (start-START_FINISH_DELTA)) continue;
+        if (bat_finishSet && o->bat > (finish+START_FINISH_DELTA)) continue;
+
         // update start/finish if it isn't set.
-        if (!startSet && o->sat < start) start=o->sat;
-        if (!finishSet && o->sat > finish) finish=o->sat;
+        if (update_start && o->sat < start) start=o->sat;
+        if (update_finish && o->sat > finish) finish=o->sat;
 
         x[ndata] = (double)(o->bbat - psr->param[param_pepoch].val[0]);
         y[ndata] = o->residual;
@@ -650,7 +666,7 @@ unsigned int t2Fit_getFitData(pulsar *psr, double* x, double* y,
     }
 
     // save the start/finish values.
-    logdbg("START=%lg FINISH = %lg",(double)start,(double)finish);
+    logmsg("START=%.18lg FINISH = %.18lg",(double)start,(double)finish);
     psr->param[param_start].val[0] = start;
     psr->param[param_finish].val[0] = finish;
     psr->param[param_start].paramSet[0] = 1;
@@ -824,7 +840,7 @@ void t2Fit_fillFitInfo(pulsar* psr, FitInfo &OUT, const FitInfo &globals, const 
                 }
 
                 logdbg("Constraining Param '%s'",psr->constraint_special[i]);
-                logdbg("Initial values: %lg %lg factor: %lg %lg",info->val,info->err,factor);
+                logdbg("Initial values: %lg %lg factor: %lg",info->val,info->err,factor);
                 info->val /= factor;
                 info->err /= factor;
 
@@ -839,6 +855,37 @@ void t2Fit_fillFitInfo(pulsar* psr, FitInfo &OUT, const FitInfo &globals, const 
                 ++OUT.nConstraints;
                 break;
                 }
+            case constraint_ne_sw_ifunc_sin:
+                {
+                double* err = (double*)malloc(sizeof(double));
+                double mean,amp,t0,p;
+                sscanf(psr->constraint_special[i],"%lg %lg %lg %lg %lg",&mean,&amp,&t0,&p,err);
+
+                for (int ii =0 ; ii < psr->ne_sw_ifuncN; ++ii) {
+                    double pval = mean-amp*cos(2*M_PI*(psr->ne_sw_ifuncT[ii] - t0)/p) - psr->ne_sw_ifuncV[ii];
+                    pval /= *err;
+                    OUT.constraintValue[OUT.nConstraints] = pval;
+                    OUT.constraintSpecial[OUT.nConstraints] = (void*)err;
+                    OUT.constraintDerivs[OUT.nConstraints] = constraint_ne_sw_ifunc_function;
+                    OUT.constraintCounters[OUT.nConstraints]=ii;
+                    ++OUT.nConstraints;
+                }
+                break;
+                }
+            case constraint_ne_sw_ifunc_sigma:
+                {
+                double* err = (double*)malloc(sizeof(double));
+                sscanf(psr->constraint_special[i],"%lg",err);
+                for (int ii =0 ; ii < psr->ne_sw_ifuncN; ++ii) {
+                    OUT.constraintValue[OUT.nConstraints] = 0;
+                    OUT.constraintSpecial[OUT.nConstraints] = (void*)err;
+                    OUT.constraintDerivs[OUT.nConstraints] = constraint_ne_sw_ifunc_function;
+                    OUT.constraintCounters[OUT.nConstraints]=ii;
+                    ++OUT.nConstraints;
+                }
+                break;
+                }
+
             default:
                 // this is a quick fix to avoid re-writing code.
                 OUT.constraintDerivs[OUT.nConstraints] = standardConstraintFunctions;
@@ -1304,7 +1351,7 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
         case param_e2dot:
         case param_xpbdot:
         case param_pbdot:
-	case param_pb2dot:
+        case param_pb2dot:
         case param_a1dot:
         case param_a2dot:
         case param_omdot:
@@ -1409,11 +1456,15 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
         case param_glf0:
         case param_glf1:
         case param_glf0d:
+        case param_glf0d2:
+        case param_glf0d3:
         case param_gltd:
+        case param_gltd2:
+        case param_gltd3:
         case param_glf2:
             if (forceAlwaysFitForGlitches ||
                     (psr->param[param_glep].val[k] > psr->param[param_start].val[0]
-                    && psr->param[param_glep].val[k] < psr->param[param_finish].val[0]) ){
+                     && psr->param[param_glep].val[k] < psr->param[param_finish].val[0]) ){
                 // glitches
                 OUT.paramDerivs[OUT.nParams]     =t2FitFunc_stdGlitch;
                 OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_simpleMinus;
@@ -1424,29 +1475,29 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
             }
             break;
 
-    case param_expph:
-    case param_exptau:
-    case param_expindex:
-    case param_expep:
-      if ((psr->param[param_expep].val[k] > psr->param[param_start].val[0]) && (psr->param[param_expep].val[k]< psr->param[param_finish].val[0]))
-	{
-	  OUT.paramDerivs[OUT.nParams] = t2FitFunc_expdip;
-	  OUT.updateFunctions[OUT.nParams] = t2UpdateFunc_simpleMinus;
-	  ++ OUT.nParams;
-	}
-      else{
-	logwarn("Refusing to fit for exponential dip which is outside of start/finish range (%.2lf)",k+1,(double)psr->param[param_expep].val[k]);
-      }
-    break;
+        case param_expph:
+        case param_exptau:
+        case param_expindex:
+        case param_expep:
+            if ((psr->param[param_expep].val[k] > psr->param[param_start].val[0]) && (psr->param[param_expep].val[k]< psr->param[param_finish].val[0]))
+            {
+                OUT.paramDerivs[OUT.nParams] = t2FitFunc_expdip;
+                OUT.updateFunctions[OUT.nParams] = t2UpdateFunc_simpleMinus;
+                ++ OUT.nParams;
+            }
+            else{
+                logwarn("Refusing to fit for exponential dip %d which is outside of start/finish range (%.2lf)",k+1,(double)psr->param[param_expep].val[k]);
+            }
+            break;
 
-    case param_gausep:
-    case param_gausamp:
-    case param_gaussig:
-    case param_gausindex:
-      	  OUT.paramDerivs[OUT.nParams] = t2FitFunc_gausdip;
-	  OUT.updateFunctions[OUT.nParams] = t2UpdateFunc_simpleMinus;
-	  ++ OUT.nParams;
-          break;
+        case param_gausep:
+        case param_gausamp:
+        case param_gaussig:
+        case param_gausindex:
+            OUT.paramDerivs[OUT.nParams] = t2FitFunc_gausdip;
+            OUT.updateFunctions[OUT.nParams] = t2UpdateFunc_simpleMinus;
+            ++ OUT.nParams;
+            break;
 
         case param_telx:
         case param_tely:
@@ -1581,10 +1632,10 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
             }
             break;
 
-         case param_red_chrom_sin:
-         case param_red_chrom_cos:
-	   {
-	        for (int i=0; i < psr->TNChromC ; ++i){
+        case param_red_chrom_sin:
+        case param_red_chrom_cos:
+            {
+                for (int i=0; i < psr->TNChromC ; ++i){
                     OUT.paramDerivs[OUT.nParams]     =t2FitFunc_nestlike_red_chrom;
                     OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_nestlike_red_chrom;
                     OUT.paramCounters[OUT.nParams]=i;
@@ -1592,28 +1643,28 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
                     ++OUT.nParams;
                 }
 
-	   }
-	   break;
+            }
+            break;
 
-	    /*
-    case param_shapevent:
-      {
-	int l;
-	l=0;
-	for (int i=0;i < psr->nTNShapeletEvents;i++)
-		  {
-		    for (int k=0;k<psr->TNShapeletEvN[i];k++)
-		      {
-			OUT.paramDerivs[OUT.nParams]     =t2FitFunc_nestlike_shapeevent;
-			OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_nestlike_shapevent;
-			OUT.paramCounters[OUT.nParams]=l;
-			OUT.paramIndex[OUT.nParams]=fit_param;
-			l++;
-			++OUT.nParams;
-		      }
-		  }
-		  }*/
-	   
+            /*
+               case param_shapevent:
+               {
+               int l;
+               l=0;
+               for (int i=0;i < psr->nTNShapeletEvents;i++)
+               {
+               for (int k=0;k<psr->TNShapeletEvN[i];k++)
+               {
+               OUT.paramDerivs[OUT.nParams]     =t2FitFunc_nestlike_shapeevent;
+               OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_nestlike_shapevent;
+               OUT.paramCounters[OUT.nParams]=l;
+               OUT.paramIndex[OUT.nParams]=fit_param;
+               l++;
+               ++OUT.nParams;
+               }
+               }
+               }*/
+
 
 
         case param_ne_sw:
@@ -1622,6 +1673,27 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
             OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_ne_sw;
             ++OUT.nParams;
             break;
+
+        case param_ne_sw_sin:
+            // solar wind sinusoidal model
+            OUT.paramDerivs[OUT.nParams]     =t2FitFunc_ne_sw_sin;
+            OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_simpleAdd;
+            ++OUT.nParams;
+            break;
+
+
+        case param_ne_sw_ifunc:
+            for (int i = 0; i < psr->ne_sw_ifuncN; ++i){
+                OUT.paramDerivs[OUT.nParams]     =t2FitFunc_ne_sw_ifunc;
+                OUT.updateFunctions[OUT.nParams] =t2UpdateFunc_ne_sw_ifunc;
+                OUT.paramCounters[OUT.nParams]=i;
+                OUT.paramIndex[OUT.nParams]=fit_param;
+                ++OUT.nParams;
+            }
+
+            break;
+
+
 
         case param_gwecc:
             // gw ECC amplitude
@@ -1684,9 +1756,9 @@ paramDerivFunc getDerivFunction(pulsar* psr, param_label fit_param, const int k)
 
 void t2Fit_fillFitInfo_INNER(pulsar* psr, FitInfo &OUT, const int globalflag){
     for (param_label fit_param=0; fit_param < param_LAST; ++fit_param){
-/*        if (fit_param == param_ifunc){
-            logmsg("if: %d %d %d",psr->param[fit_param].paramSet[0],psr->param[fit_param].fitFlag[0],psr->param[fit_param].aSize);
-        }*/
+        /*        if (fit_param == param_ifunc){
+                  logmsg("if: %d %d %d",psr->param[fit_param].paramSet[0],psr->param[fit_param].fitFlag[0],psr->param[fit_param].aSize);
+                  }*/
         for(int k=0; k < psr->param[fit_param].aSize;k++){
             if (psr->param[fit_param].paramSet[k]>0 && psr->param[fit_param].fitFlag[k]==globalflag) {
                 t2fit_fillOneParameterFitInfo(psr,fit_param,k,OUT);
@@ -1853,24 +1925,24 @@ void TKleastSquares_global_pulsar(double **x,double **y,int *n,
 
 
 
-void TKfit_getPulsarDesignMatrix(double *x,double *y,int n,int nf,void (*fitFuncs)(double, double [], int,pulsar *,int,int), pulsar *psr, int* ip, double **uinv,int ipsr,double ***OUT_designMatrix,double ***OUT_white_designMatrix,double** OUT_b, double** OUT_wb){
+void TKfit_getPulsarDesignMatrix(double *x,double *y,int n,int nf,void (*fitFuncs)(double, double [], int,pulsar *,int,int), pulsar *psr, int* ip, double **cholesky_L,int ipsr,double ***OUT_designMatrix,double ***OUT_white_designMatrix,double** OUT_b, double** OUT_wb){
 
     //double precision arrays for matrix algebra.
     double **designMatrix, **white_designMatrix;
     double basisFunc[nf];
     double *b,*white_b;
     int    i,j;
-    int nrows=get_blas_rows(uinv);
-    int ncols=get_blas_cols(uinv);
+    int nrows=get_blas_rows(cholesky_L);
+    int ncols=get_blas_cols(cholesky_L);
     if (ncols!=n){
         logmsg("n=%d ncols=%d",n,ncols);
-        logerr("uinv error. Either you did not use malloc_uinv() to create uinv or np!=ncols");
+        logerr("cholesky_L error. Either you did not use malloc_uinv() to create cholesky_L/uinv or np!=ncols");
         exit(1);
     }
 
     if (nrows!=n && nrows != 1){
         logmsg("n=%d nrows=%d",n,nrows);
-        logerr("uinv error. Either you did not use malloc_uinv() to create uinv or np!=nrows");
+        logerr("cholesky_L error. Either you did not use malloc_uinv() to create cholesky_L/uinv or np!=nrows");
         exit(1);
     }
 
@@ -1898,14 +1970,19 @@ void TKfit_getPulsarDesignMatrix(double *x,double *y,int n,int nf,void (*fitFunc
     if(nrows==1){
         // we have only diagonal elements
         for (i=0;i<n;i++){
-            white_b[i]=b[i]*uinv[0][i];
+            white_b[i]=b[i]*cholesky_L[0][i];
             for (j=0;j<nf;j++){
-                white_designMatrix[i][j] = designMatrix[i][j]*uinv[0][i];
+                white_designMatrix[i][j] = designMatrix[i][j]*cholesky_L[0][i];
             }
         }
     } else {
-        TKmultMatrix_sq(uinv,designMatrix,n,nf,white_designMatrix);  
-        TKmultMatrixVec_sq(uinv,b,n,white_b);
+        logdbg("NO_UINV");
+
+        logtchk("fwdSub L");
+        TKforwardSubVec(cholesky_L,b,n,white_b);
+        TKforwardSub(cholesky_L,designMatrix,n,nf,white_designMatrix);
+        logtchk("done fwdSub L");
+
     }
 
     *OUT_designMatrix=designMatrix;
@@ -1929,7 +2006,7 @@ void TKleastSquares_svd_psr(double *x,double *y,double *sig,int n,double *p,doub
     double ** uinv=malloc_blas(1,n);
     if (weight==1){
         for (i=0; i<n;i++){
-            uinv[0][i]=1.0/sig[i];
+            uinv[0][i]=sig[i];
         }
     } else{
         for (i=0; i<n;i++){

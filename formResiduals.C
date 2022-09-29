@@ -567,19 +567,36 @@ void formResiduals(pulsar *psr,int npsr,int removeMean)
                     /* Only has effect after the glitch epoch */
                     if (tp >= tgl) 
                     {
+                        double expf2,expf3;
                         dt1 = tp-tgl;
                         if (psr[p].param[param_gltd].val[k]!=0.0)
                             expf = exp(-dt1/86400.0/psr[p].param[param_gltd].val[k]);
                         else
                             expf = 1.0;
 
+                        if (psr[p].param[param_gltd2].val[k]!=0.0)
+                            expf2 = exp(-dt1/86400.0/psr[p].param[param_gltd2].val[k]);
+                        else
+                            expf2 = 1.0;
+
+                        if (psr[p].param[param_gltd3].val[k]!=0.0)
+                            expf3 = exp(-dt1/86400.0/psr[p].param[param_gltd3].val[k]);
+                        else
+                            expf3 = 1.0;
+
+
+
                         // What happens if GLF2 (or GLF1) is not set?
                         phase4+=psr[p].param[param_glph].val[k]+
                             psr[p].param[param_glf0].val[k]*dt1 + 
                             0.5*psr[p].param[param_glf1].val[k]*dt1*dt1 +
                             1.0/6.0*psr[p].param[param_glf2].val[k]*dt1*dt1*dt1 +
-                            psr[p].param[param_glf0d].val[k]*
-                            psr[p].param[param_gltd].val[k]*86400.0*(1.0-expf);
+                            psr[p].param[param_glf0d].val[k]*  // first exponential
+                            psr[p].param[param_gltd].val[k]*86400.0*(1.0-expf) + 
+                            psr[p].param[param_glf0d2].val[k]*  // second exponential
+                            psr[p].param[param_gltd2].val[k]*86400.0*(1.0-expf2)+
+                            psr[p].param[param_glf0d3].val[k]* // third exponential
+                            psr[p].param[param_gltd3].val[k]*86400.0*(1.0-expf3);
                         //		       printf("Glitch phase = %10f\n",(double)(psr[p].param[param_glph].val[k]+
                         //			 psr[p].param[param_glf0].val[k]*dt1 + 
                         //			 0.5*psr[p].param[param_glf1].val[k]*dt1*dt1 +
@@ -2039,19 +2056,41 @@ void formResiduals(pulsar *psr,int npsr,int removeMean)
 
         }
         // Now calculate phas1 to set the first residual equal to zero
+        // 
+        bool startSet = psr[p].param[param_start].paramSet[0]==1
+            && psr[p].param[param_start].fitFlag[0]==1;
+        bool finishSet = psr[p].param[param_finish].paramSet[0]==1
+            && psr[p].param[param_finish].fitFlag[0]==1;
+
+        bool bat_startSet = psr[p].param[param_start].paramSet[0]==1
+            && psr[p].param[param_start].fitFlag[0]==2;
+        bool bat_finishSet = psr[p].param[param_finish].paramSet[0]==1
+            && psr[p].param[param_finish].fitFlag[0]==2;
+
+        longdouble start = 1e10;
+        longdouble finish = 0;
+
+        // if we are fixing start/finish then use the specified values.
+        if (startSet||bat_startSet) start = psr->param[param_start].val[0];
+        if (finishSet||bat_finishSet) finish = psr->param[param_finish].val[0];
+
+
         for (i=0;i<psr[p].nobs;i++)
         {
-            if (psr[p].obsn[i].deleted==0 && 
-                    (psr[0].param[param_start].fitFlag[0]==0 
-                     || psr[0].obsn[i].sat > psr[0].param[param_start].val[0]-START_FINISH_DELTA) &&
-                    (psr[0].param[param_finish].fitFlag[0]==0 
-                     || psr[0].obsn[i].sat < psr[0].param[param_finish].val[0]+START_FINISH_DELTA))
-            {
-                phas1 = fortran_mod((phase5[i]),longdouble(1.0));
+            /* MJK 2021 - update to use same logic for start/finish as t2Fit */
+            observation *o = psr[0].obsn+i;
+            // skip deleted points
+            if (o->deleted) continue;
 
-                //	       printf("phas1 set to observation number %d\n",i);
-                break;
-            }
+            // if start/finish is set, skip points outside of the range
+            if (startSet && o->sat < (start-START_FINISH_DELTA)) continue;
+            if (finishSet && o->sat > (finish+START_FINISH_DELTA)) continue;
+
+            if (bat_startSet && o->bat < (start-START_FINISH_DELTA)) continue;
+            if (bat_finishSet && o->bat > (finish+START_FINISH_DELTA)) continue;
+
+            phas1 = fortran_mod((phase5[i]),longdouble(1.0));
+            break;
 
         }
         for (i=0;i<psr[p].nobs;i++)
@@ -2251,7 +2290,7 @@ void formResiduals(pulsar *psr,int npsr,int removeMean)
         newmean = newmean/psr[p].nobs;
 
         // deal with the REFPHS option before we look at red noise etc.
-        if(psr->refphs==REFPHS_TZR){
+        if(psr[p].refphs==REFPHS_TZR){
             // remove our TZR observation and store it in tzrobs for later use.
             memcpy(&(psr[p].tzrobs),&(psr[p].obsn[psr[p].nobs-1]),sizeof(observation));
             psr[p].nobs--;

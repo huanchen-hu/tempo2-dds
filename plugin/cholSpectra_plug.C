@@ -424,7 +424,7 @@ const char * plugVersionCheck = TEMPO2_h_VER;
 
 void calculateSpectrum(pulsar *psr, double T, int nSpec, double *px, double *py_r, double *py_i,int outWhite,int outUinv) {
     int i;
-    double **uinv;
+    double **cholesky_L;
     FILE *fin;
     int ndays=0;
     double resx[psr->nobs],resy[psr->nobs],rese[psr->nobs];
@@ -433,22 +433,45 @@ void calculateSpectrum(pulsar *psr, double T, int nSpec, double *px, double *py_
 
     logmsg("calculateSpectrum '%s' %f %d",psr->name,T,nSpec);
     // only do between start and finish
+    //
+    bool startSet = psr->param[param_start].paramSet[0]==1
+        && psr->param[param_start].fitFlag[0]==1;
+    bool finishSet = psr->param[param_finish].paramSet[0]==1
+        && psr->param[param_finish].fitFlag[0]==1;
+
+    bool bat_startSet = psr->param[param_start].paramSet[0]==1
+        && psr->param[param_start].fitFlag[0]==2;
+    bool bat_finishSet = psr->param[param_finish].paramSet[0]==1
+        && psr->param[param_finish].fitFlag[0]==2;
+
+    longdouble start = 1e10;
+    longdouble finish = 0;
+
+    // if we are fixing start/finish then use the specified values.
+    if (startSet||bat_startSet) start = psr->param[param_start].val[0];
+    if (finishSet||bat_finishSet) finish = psr->param[param_finish].val[0];
 
     int nobs=0;
     for (i=0;i<psr->nobs;i++){
-        if(psr->obsn[i].deleted !=0)continue;
-        if (psr->param[param_start].paramSet[0]==1 && psr->param[param_start].fitFlag[0]==1 &&
-                (psr->param[param_start].val[0] > psr->obsn[i].sat))
-            continue;
-        if (psr->param[param_finish].paramSet[0]==1 && psr->param[param_finish].fitFlag[0]==1 &&
-                psr->param[param_finish].val[0] < psr->obsn[i].sat)
-            continue;
+
+        /* MJK 2021 - update to use same logic for start/finish as t2Fit */
+        observation *o = psr->obsn+i;
+        // skip deleted points
+        if (o->deleted) continue;
+
+        // if start/finish is set, skip points outside of the range
+        if (startSet && o->sat < (start-START_FINISH_DELTA)) continue;
+        if (finishSet && o->sat > (finish+START_FINISH_DELTA)) continue;
+
+        if (bat_startSet && o->bat < (start-START_FINISH_DELTA)) continue;
+        if (bat_finishSet && o->bat > (finish+START_FINISH_DELTA)) continue;
+
         nobs++;
     }
 
     logmsg("Total obs = %d, Good obs = %d",psr->nobs,nobs);
     //  printf("Calculating the spectrum\n");
-    uinv = malloc_uinv(nobs);
+    cholesky_L = malloc_uinv(nobs);
 
     int ir=0;
     for (i=0;i<psr->nobs;i++)
@@ -477,31 +500,28 @@ void calculateSpectrum(pulsar *psr, double T, int nSpec, double *px, double *py_
         logmsg("Warning: Assuming -dcf %s",covarFuncFile);
     }
 
-    logmsg("Get Cholesky 'uinv' matrix from '%s'",covarFuncFile);
-    getCholeskyMatrix(uinv,covarFuncFile,psr,resx,resy,rese,nobs,0,ip);
-    logdbg("Got uinv, now compute spectrum.");
+    // Must calculate L for the pulsar
+    logmsg("Get Cholesky 'L' matrix from '%s'",covarFuncFile);
+    getCholeskyMatrix(cholesky_L,covarFuncFile,psr,resx,resy,rese,nobs,0,ip);
+    logdbg("Got L, now compute spectrum.");
 
-    // Must calculate uinv for the pulsar
-    //
-    //   int calcSpectra_ri_T(double **uinv,double *resx,double *resy,int nres,double *specX,double *specY_R,double *specY_I,int nfit,double T,char fitfuncMode, pulsar* psr)
     char mde = 'N';
     if (T < 0){
         mde='T';
         T=-T;
     }
-    calcSpectra_ri_T(uinv,resx,resy,nobs,px,py_r,py_i,nSpec,T,mde,psr);
+    calcSpectra_ri_T(cholesky_L,resx,resy,nobs,px,py_r,py_i,nSpec,T,mde,psr);
 
     if (outUinv==1)
     {
         FILE *fout;
         int i,j;
 
-        fout = fopen("cholSpectra.uinv","w");
+        fout = fopen("cholSpectra.L","w");
         for (i=0;i<nobs;i++){
             for (j=0;j<nobs;j++)
             {
-                //	     printf("%d %d %g\n",i,j,uinv[i][j]);
-                fprintf(fout,"%d %d %g\n",i,j,uinv[i][j]);
+                fprintf(fout,"%d %d %g\n",i,j,cholesky_L[i][j]);
             }
         }
         fclose(fout);
@@ -512,7 +532,7 @@ void calculateSpectrum(pulsar *psr, double T, int nSpec, double *px, double *py_
         FILE *fout;
 
         printf("Outputting whitened residuals\n");
-        T2getWhiteRes(resx,resy,rese,nobs,uinv,outRes);
+        T2getWhiteRes(resx,resy,rese,nobs,cholesky_L,outRes);
         if (!(fout = fopen("whiteRes.dat","w"))){
             printf("Unable to open file whiteRes.dat\n");
             exit(1);
@@ -525,8 +545,8 @@ void calculateSpectrum(pulsar *psr, double T, int nSpec, double *px, double *py_
         fclose(fout);
     }
 
-    // Free uinv
-    free_uinv(uinv);
+    // Free cholesky_L
+    free_uinv(cholesky_L);
 
 }
 

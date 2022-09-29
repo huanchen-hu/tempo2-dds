@@ -50,8 +50,8 @@
 
 
 #define TEMPO2_h_HASH "$Id$"
-#define TEMPO2_h_VER "2020.11.1"
-#define TEMPO2_h_MAJOR_VER 2020.11
+#define TEMPO2_h_VER "2022.05.1"
+#define TEMPO2_h_MAJOR_VER 2022.05
 #define TEMPO2_h_MINOR_VER 1
 #define TSUN longdouble(4.925490947e-6) /*!< Solar constant for mass calculations. */
 #define MAX_FREQ_DERIVATIVES 13    /*!< F0 -> Fn   where n=10                            */
@@ -193,6 +193,8 @@ enum label {
     param_ne_sw,
     param_shapevent,
     param_orbifunc,
+    param_gltd2,param_gltd3, param_glf0d2, param_glf0d3,
+    param_ne_sw_sin,param_ne_sw_ifunc,
     // ** ADD NEW PARAMETERS ABOVE HERE **
     // THE BELOW LINE MUST BE THE LAST LINE IN THIS ENUM
     param_LAST, /*!< Marker for the last param to be used in for loops  */
@@ -270,6 +272,8 @@ enum constraint {
     constraint_group_red_cos,
     constraint_jitter,
     constraint_param,
+    constraint_ne_sw_ifunc_sin,
+    constraint_ne_sw_ifunc_sigma,
     constraint_LAST /*!< marker for the last constraint */
 };
 
@@ -286,14 +290,14 @@ extern double ECLIPTIC_OBLIQUITY;
 
 extern int forceGlobalFit;   /*!< Global = 1 if we are forcing a global fit */
 extern int veryFast;    /*!< Global to run the code fast */
-extern char tempo2MachineType[MAX_FILELEN];
+extern char tempo2MachineType[100];
 extern int displayCVSversion; /*!< Display CVS version */
 
 extern char dcmFile[MAX_FILELEN];
 extern char covarFuncFile[MAX_FILELEN];
 
-extern char tempo2_clock_path[MAX_STRLEN]; /*!< paths to search for clock files */
-extern char tempo2_plug_path[32][MAX_STRLEN]; /*!< paths to search for plugins */
+extern char tempo2_clock_path[MAX_FILELEN]; /*!< paths to search for clock files */
+extern char tempo2_plug_path[32][MAX_FILELEN]; /*!< paths to search for plugins */
 extern int tempo2_plug_path_len;
 
 
@@ -435,7 +439,7 @@ typedef struct observation {
   double averagedmerr;
 
   
-  char        fname[MAX_FILELEN]; /*!< Name of data file giving TOA                               */
+  char        fname[MAX_FILELEN+1]; /*!< Name of data file giving TOA                               */
     char        telID[100];         /*!< Telescope ID                                               */
     clock_correction correctionsTT[MAX_CLK_CORR]; /*!< chain of corrections from site TOA to chosen realisation of TT */
     int nclock_correction;
@@ -495,6 +499,7 @@ typedef struct observation {
     double tobs;
     double chisq;
     double bline;
+    double spherical_solar_wind;   /* The conversion from ne to residual for a spherical solar wind model */
 } observation;
 
 
@@ -797,7 +802,7 @@ typedef struct pulsar {
     char AverageFlag[MAX_FLAG_LEN];
     float AverageEpochWidth; 
 
-    double detUinv;
+    double detL;
 
 
     int outputTMatrix;
@@ -882,6 +887,18 @@ typedef struct pulsar {
     double posPulsarEquatorial[3];            /*!< 3-vector pointing at pulsar, in equatorial coordinates (even if using ecliptic)*/
 
     enum series_type dm_series_type;
+
+    /* Quasi-periodic timing noise components */
+    double TN_QpPeriod;
+    double TN_QpSig;
+    double TN_QpLam;
+    double TN_QpRatio;
+
+    double ne_sw_ifuncT[MAX_IFUNC];
+    double ne_sw_ifuncV[MAX_IFUNC];
+    double ne_sw_ifuncE[MAX_IFUNC];
+    int ne_sw_ifuncN;
+
 } pulsar;
 
 
@@ -1081,14 +1098,12 @@ extern "C" {
 
     observatory *getObservatory(char *code);
     void lookup_observatory_alias(char *incode, char *outcode);
-    void 
-        get_obsCoord_IAU2000B(double observatory_trs[3],
-                double zenith_trs[3],
-                longdouble tt_mjd, longdouble utc_mjd,
-                double observatory_crs[3],
-                double zenith_crs[3],
-                double observatory_velocity_crs[3]);
-
+    void get_obsCoord_IAU2000B(double observatory_trs[3],
+        double zenith_trs[3],
+        longdouble tt_mjd, longdouble utc_mjd,
+        double observatory_crs[3],
+        double zenith_crs[3],
+        double observatory_velocity_crs[3],char *eopcFile);
 
     /* redwards stuff to get earth orientation parameters */
     void get_EOP(double mjd, double *xp, double *yp, double *dut1, 

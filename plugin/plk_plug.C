@@ -139,6 +139,7 @@ void help() /* Display help */
     printf("ctrl-=     add period to residuals above cursor\n");
     printf("/          re-read .par file\n");
     printf("Ctrl-g     add an amount to each jump being fit.\n");
+    printf(":          undelete all deleted points\n");
 
     printf("\nPlot Selection\n"); /* Determines WHAT (X and Y axes) will be displayed */
     printf("==============\n");
@@ -221,6 +222,7 @@ void help() /* Display help */
     printf("]          toggle plotting y-axis on log scale\n");	     
     printf("{          scroll left\n");	     
     printf("}          scroll right\n");	     
+    printf(";          show deleted points\n");	     
 
     printf("\nOutput Options\n");
     printf("==============\n");
@@ -633,6 +635,7 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
     int jumpOffset=0;
     int okay;
 
+    bool showDeleted=false;
 
 
 
@@ -845,11 +848,11 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
     // Get initial zoom position from start/finish flags.
     if (centre==-1)     centreEpoch = psr[0].param[param_pepoch].val[0];
     else if (centre==1)	centreEpoch = (min1+max1)/2.0;
-    if (psr[0].param[param_start].paramSet[0]==1 && psr[0].param[param_start].fitFlag[0]==1) {
+    if (psr[0].param[param_start].paramSet[0]==1 && psr[0].param[param_start].fitFlag[0]!=0) {
         setZoomX1=1;
         zoomX1=psr[0].param[param_start].val[0]-centreEpoch;
     }
-    if (psr[0].param[param_finish].paramSet[0]==1 && psr[0].param[param_finish].fitFlag[0]==1) {
+    if (psr[0].param[param_finish].paramSet[0]==1 && psr[0].param[param_finish].fitFlag[0]!=0) {
         setZoomX2=1;
         zoomX2=psr[0].param[param_finish].val[0]-centreEpoch;
     }
@@ -951,8 +954,9 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
         {
             okay=1;
 
-            if (psr[0].obsn[i].deleted!=0)
+            if (psr[0].obsn[i].deleted!=0 && (!showDeleted)){
                 okay=0;
+            }
 
             // MJK April 2020
             // Removing this might break some use cases with command line options.
@@ -1336,6 +1340,19 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
                                 cpgpt(1,&x[i],&y[i],flagStyle[j]);
                             }
                         }
+                    }
+                }
+            }
+            if (showDeleted) {
+
+                for (i=0;i<count;i++){
+                    if(psr[0].obsn[id[i]].deleted){
+                        cpgsci(13);
+                        float ch;
+                        cpgqch(&ch);
+                        cpgsch(1.5*ch);
+                        cpgpt(1,&x[i],&y[i],5);
+                        cpgsch(ch);
                     }
                 }
             }
@@ -2278,6 +2295,22 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
                     setZoomY1 = 1;
                     setZoomY2 = 1;
                 }
+                else if (key==';')
+                {
+                    if(showDeleted){
+                        printf("Hide Deleted points\n");
+                        showDeleted=false;
+                    } else {
+                        printf("Show Deleted points\n");
+                        showDeleted=true;
+                    }
+                }
+                else if (key==':'){
+                    printf("Undelete all\n");
+                    for (i=0;i<psr[0].nobs;i++) {
+                        psr[0].obsn[i].deleted=0;
+                    }
+                }
                 else if (key=='B') { /* Place periodic marks on the x-axis */
                     placeMarks*=-1;
                     if (placeMarks==1)
@@ -3033,7 +3066,11 @@ float deletePoint(pulsar *psr,float *x,float *y,int *id,int count,float mouseX,f
             closest = pow(xpos-mouseX,2)+pow(ypos-mouseY,2);
         }
     }
+    if ( psr[0].obsn[iclosest].deleted==0){
     psr[0].obsn[iclosest].deleted=1;
+    } else {
+    psr[0].obsn[iclosest].deleted=0;
+    }
     if (recordStrokes==1)
     {
         char recordStr[1024];
@@ -3303,44 +3340,46 @@ void checkMenu(pulsar *psr,float mx,float my,int button,int fitFlag,
         }
         else if (menu==3)
         {
-            int count=0;
-            int xpos,ypos;
-            int i,j;
-            xpos=0;
-            ypos=0;
-            //	  if (*paramOffset > 0)
-            {
-                if (mouseX == 9 && mouseY == 0 && *paramOffset > 0)		
-                    (*paramOffset)--;
-                else if (mouseX == 9 && mouseY == 2)
-                    (*paramOffset)++;
-                printf("Setting offset in menu to be %d\n",*paramOffset);
-            }
-            for (i=0;i<MAX_PARAMS;i++)
-            {
-                for (j=0;j<psr[0].param[i].aSize;j++)
+            if (mouseY < 3){
+                int count=0;
+                int xpos,ypos;
+                int i,j;
+                xpos=0;
+                ypos=0;
+                //	  if (*paramOffset > 0)
                 {
-                    if (psr[0].param[i].paramSet[j]==1)
+                    if (mouseX == 9 && mouseY == 0 && *paramOffset > 0)		
+                        (*paramOffset)--;
+                    else if (mouseX == 9 && mouseY == 2)
+                        (*paramOffset)++;
+                    printf("Setting offset in menu to be %d\n",*paramOffset);
+                }
+                for (i=0;i<MAX_PARAMS;i++)
+                {
+                    for (j=0;j<psr[0].param[i].aSize;j++)
                     {
-                        if (strcmp(psr[0].param[i].shortlabel[j],"DMEPOCH")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"PEPOCH")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"START")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"FINISH")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"TRACK")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"IPERHARM")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"TZRMJD")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"TZRFRQ")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"TRES")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"EPHVER")!=0 &&
-                                strcmp(psr[0].param[i].shortlabel[j],"POSEPOCH")!=0)
+                        if (psr[0].param[i].paramSet[j]==1)
                         {
-                            if (mouseX==xpos && mouseY==ypos-(*paramOffset))
-                                swapFit(psr,i,j,button);
-                            xpos++;
-                            if (xpos > 8)
+                            if (strcmp(psr[0].param[i].shortlabel[j],"DMEPOCH")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"PEPOCH")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"START")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"FINISH")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"TRACK")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"IPERHARM")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"TZRMJD")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"TZRFRQ")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"TRES")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"EPHVER")!=0 &&
+                                    strcmp(psr[0].param[i].shortlabel[j],"POSEPOCH")!=0)
                             {
-                                xpos=0;
-                                ypos++;
+                                if (mouseX==xpos && mouseY==ypos-(*paramOffset))
+                                    swapFit(psr,i,j,button);
+                                xpos++;
+                                if (xpos > 8)
+                                {
+                                    xpos=0;
+                                    ypos++;
+                                }
                             }
                         }
                     }
@@ -4141,7 +4180,7 @@ void reFit(int fitFlag,int setZoomX1,int setZoomX2,float zoomX1,float zoomX2,
         if (plotX==3 || plotX==12) {
             if (setZoomX1 == 1) {
                 psr[0].param[param_start].paramSet[0]=1;
-                psr[0].param[param_start].fitFlag[0]=1;
+                psr[0].param[param_start].fitFlag[0]=2;
                 if (plotX==12)
                     psr[0].param[param_start].val[0] = zoomX1;
                 else
@@ -4157,7 +4196,7 @@ void reFit(int fitFlag,int setZoomX1,int setZoomX2,float zoomX1,float zoomX2,
         if (plotX==3 || plotX==12) {
             if (setZoomX2 == 1) {
                 psr[0].param[param_finish].paramSet[0]=1; 
-                psr[0].param[param_finish].fitFlag[0]=1;
+                psr[0].param[param_finish].fitFlag[0]=2;
                 if (plotX==12)
                     psr[0].param[param_finish].val[0] = zoomX2;
                 else
