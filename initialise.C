@@ -196,6 +196,8 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     psr->nTNSQ = 0; // Number of TNEQUADs
     psr->TNRedAmp = 0;
     psr->TNRedGam = 0;
+    psr->TNRedAmp2 = 0;
+    psr->TNRedGam2 = 0;
     psr->TNRedC = 0;
     psr->TNRedFLow=0;
     psr->TNRedCorner=0.0;

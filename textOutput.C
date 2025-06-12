@@ -1499,7 +1499,7 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                     fprintf(fout2,"TNDMAmp %g\n", psr[p].TNDMAmp);	
                     fprintf(fout2,"TNDMGam %g\n", psr[p].TNDMGam);
                     fprintf(fout2,"TNDMC %i\n", psr[p].TNDMC);
-                    if (psr[p].TNChrom_log_freqs > 0){
+                    if (psr[p].TNDM_log_freqs > 0){
                         fprintf(fout2,"TNDMFLog %i\n", psr[p].TNDM_log_freqs);
                         fprintf(fout2,"TNDMFLog_factor %lf\n", psr[p].TNDM_log_factor);
                     }
@@ -1525,6 +1525,10 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                     if (psr[p].TNRed_log_freqs > 0){
                         fprintf(fout2,"TNRedFLog %i\n", psr[p].TNRed_log_freqs);
                         fprintf(fout2,"TNRedFLog_factor %lf\n", psr[p].TNRed_log_factor);
+                    }
+                    if(psr[p].TNRedAmp2 != 0 && psr[p].TNRedGam2 != 0){
+                        fprintf(fout2,"TNRedAmp2 %g\n", psr[p].TNRedAmp2);
+                        fprintf(fout2,"TNRedGam2 %g\n", psr[p].TNRedGam2);
                     }
                 }
 

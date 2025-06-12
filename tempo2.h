@@ -784,6 +784,8 @@ typedef struct pulsar {
     //Stochastic Parameters
     double TNRedAmp;
     double TNRedGam;
+    double TNRedAmp2;
+    double TNRedGam2;
     int TNRedC;
     double TNRedCoeffs[200];
     double TNRedFLow;
