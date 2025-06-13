@@ -35,13 +35,19 @@ double constraints_nestlike_red(pulsar *psr,int ipsr, int iconstraint,int iparam
             ) {
         double maxtspan = psr[ipsr].param[param_finish].val[0] - psr[ipsr].param[param_start].val[0];
         double RedFLow = pow(10., psr[ipsr].TNRedFLow);
-        double RedAmp = pow(10.,psr[ipsr].TNRedAmp);
-        double RedAmp2 = 0;
-        double RedIndex2=1;
+
+        
+
         double freq0 = RedFLow*(1.0/maxtspan);
         double freq = freq0*((double)(k+1.0));
         double df = RedFLow/(maxtspan*86400.0); // in per second
+
+        double RedAmp = pow(10.,psr[ipsr].TNRedAmp);
         double RedIndex = psr[ipsr].TNRedGam;
+
+        double RedAmp2 = pow(10., psr[ipsr].TNRedAmp2);
+        double RedIndex2=psr[ipsr].TNRedGam2;
+        bool have2powerlaw = psr[ipsr].TNRedAmp2 != 0;
         if (k==0 && psr[ipsr].TNRed_log_freqs>0){
             // we have log frequencies, so the df is different for the 1/Tspan bin
             df = (freq - freq0*pow(psr[ipsr].TNRed_log_factor,-1))/86400.0; // in per second
@@ -63,14 +69,14 @@ double constraints_nestlike_red(pulsar *psr,int ipsr, int iconstraint,int iparam
             // we have a model with a corner frequency.
             double RedCorner = psr[ipsr].TNRedCorner/maxtspan;
             rho = pow((1+(pow((1.0/365.25)/RedCorner,RedIndex/2))),2)*(RedAmp*RedAmp/12.0/(M_PI*M_PI))/pow((1+(pow(freq/RedCorner,RedIndex/2))),2)*df*pow(f1yr,-3.0);
-            if (RedAmp2 > 0) {
+            if (have2powerlaw) {
                 // we have a second term
                 rho += pow((1+(pow((1.0/365.25)/RedCorner,RedIndex2/2))),2)*(RedAmp2*RedAmp2/12.0/(M_PI*M_PI))/pow((1+(pow(freq/RedCorner,RedIndex2/2))),2)*df*pow(f1yr,-3.0);
             }
         } else {
             // pure power-law
             rho = (RedAmp*RedAmp/12.0/(M_PI*M_PI))*pow(f1yr,-3.0) * pow(freq*365.25,(-RedIndex))*df;
-            if (RedAmp2 > 0) {
+            if (have2powerlaw) {
                 // we have a second term
                 rho += (RedAmp2*RedAmp2/12.0/(M_PI*M_PI))*pow(f1yr,-3.0) * pow(freq*365.25,(-RedIndex2))*df;
             }
@@ -80,7 +86,7 @@ double constraints_nestlike_red(pulsar *psr,int ipsr, int iconstraint,int iparam
             // Add a QP term
             double qp_f0 = 1.0/psr[ipsr].TN_QpPeriod;
             double logPqp = psr[ipsr].TN_QpRatio + log10((RedAmp*RedAmp/12.0/(M_PI*M_PI))*pow(f1yr,-3.0) * pow(qp_f0*365.25,(-RedIndex))*df);
-            if (RedAmp2 > 0) {
+            if (have2powerlaw) {
                 // we have a second red term
                 logPqp += log10((RedAmp2*RedAmp2/12.0/(M_PI*M_PI))*pow(f1yr,-3.0) * pow(qp_f0*365.25,(-RedIndex2))*df);
             }
