@@ -772,6 +772,17 @@ void writeTim(const char *timname,pulsar *psr,const char *fileFormat)
                     oldsat -= v/SECDAY;
                 }
             }
+            // Reverse any per-TOA site arrival time offset applied via -addsat when reading
+            // so that writing + subsequent reading does not double-apply the offset.
+            for (int k=0;k<psr->obsn[i].nFlags;k++)
+            {
+                if (strcmp(psr->obsn[i].flagID[k],"-addsat")==0)
+                {
+                    longdouble v;
+                    v = parse_longdouble(psr->obsn[i].flagVal[k]);
+                    oldsat -= v/SECDAY;
+                }
+            }
 
             ///////////////////////////////////////////////////////////////////
             //////// Done undoing what was done in preProcessSimple.C /////////
