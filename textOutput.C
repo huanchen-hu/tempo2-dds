@@ -1424,7 +1424,7 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                     sscanf(psr[p].jumpStr[i],"%s %s %s %s %s",str1,str2,str3,str4,str5);
                     if (strcasecmp(str1,"FREQ")==0 || strcasecmp(str1,"MJD")==0)
                         fprintf(fout2,"JUMP %s %s %s %.14g %d\n",str1,str2,str3,psr[p].jumpVal[i],psr[p].fitJump[i]);
-                    else if (strcasecmp(str1,"NAME")==0 || strcasecmp(str1,"TEL")==0 || str1[0]=='-')
+                    else if (strcasecmp(str1,"NAME")==0 || strcasecmp(str1,"TEL")==0 || strcasecmp(str1,"SCALED")==0 || str1[0]=='-')
                         fprintf(fout2,"JUMP %s %s %.14g %d\n",str1,str2,psr[p].jumpVal[i],psr[p].fitJump[i]);
                 }	
                 for (i=1;i<=psr[p].nfdJumps;i++)
@@ -1499,12 +1499,20 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                     fprintf(fout2,"TNDMAmp %g\n", psr[p].TNDMAmp);	
                     fprintf(fout2,"TNDMGam %g\n", psr[p].TNDMGam);
                     fprintf(fout2,"TNDMC %i\n", psr[p].TNDMC);
+                    if (psr[p].TNDM_log_freqs > 0){
+                        fprintf(fout2,"TNDMFLog %i\n", psr[p].TNDM_log_freqs);
+                        fprintf(fout2,"TNDMFLog_factor %lf\n", psr[p].TNDM_log_factor);
+                    }
                 }
 		        if(psr[p].TNChromAmp != 0 && psr[p].TNChromGam != 0){
                     fprintf(fout2,"TNChromAmp %g\n", psr[p].TNChromAmp);	
                     fprintf(fout2,"TNChromGam %g\n", psr[p].TNChromGam);
                     fprintf(fout2,"TNChromIdx %g\n", psr[p].TNChromIdx);
                     fprintf(fout2,"TNChromC %i\n", psr[p].TNChromC);
+                    if (psr[p].TNChrom_log_freqs > 0){
+                        fprintf(fout2,"TNChromFLog %i\n", psr[p].TNChrom_log_freqs);
+                        fprintf(fout2,"TNChromFLog_factor %lf\n", psr[p].TNChrom_log_factor);
+                    }
                 } else if (psr[p].TNChromIdx != 0){
                     fprintf(fout2,"CHROM_INDEX %g\n", psr[p].TNChromIdx);
                 }
@@ -1517,6 +1525,10 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                     if (psr[p].TNRed_log_freqs > 0){
                         fprintf(fout2,"TNRedFLog %i\n", psr[p].TNRed_log_freqs);
                         fprintf(fout2,"TNRedFLog_factor %lf\n", psr[p].TNRed_log_factor);
+                    }
+                    if(psr[p].TNRedAmp2 != 0 && psr[p].TNRedGam2 != 0){
+                        fprintf(fout2,"TNRedAmp2 %g\n", psr[p].TNRedAmp2);
+                        fprintf(fout2,"TNRedGam2 %g\n", psr[p].TNRedGam2);
                     }
                 }
 
@@ -1552,6 +1564,10 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
 
                 if (psr[p].TNsubtractRed ==1){
                     fprintf(fout2,"TNsubtractRed 1\n");
+
+                }
+                if (psr[p].TNsubtractPoly ==1){
+                    fprintf(fout2,"TNsubtractPoly %d\n", psr[p].TNsubtractPoly);
 
                 }
 

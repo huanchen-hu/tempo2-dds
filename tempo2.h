@@ -50,8 +50,8 @@
 
 
 #define TEMPO2_h_HASH "$Id$"
-#define TEMPO2_h_VER "2024.12.1"
-#define TEMPO2_h_MAJOR_VER 2024.12
+#define TEMPO2_h_VER "2025.02.1"
+#define TEMPO2_h_MAJOR_VER 2025.02
 #define TEMPO2_h_MINOR_VER 1
 #define TSUN longdouble(4.925490947e-6) /*!< Solar constant for mass calculations. */
 #define MAX_FREQ_DERIVATIVES 13    /*!< F0 -> Fn   where n=10                            */
@@ -197,6 +197,7 @@ enum label {
     param_gltd2,param_gltd3, param_glf0d2, param_glf0d3,
     param_ne_sw_sin,param_ne_sw_ifunc,
     param_chromx, param_chromxr1, param_chromxr2, // chromatic version of DMX.
+    param_nudot_epoch, param_nudot_amp, param_nudot_transition_time, 
     // ** ADD NEW PARAMETERS ABOVE HERE **
     // THE BELOW LINE MUST BE THE LAST LINE IN THIS ENUM
     param_LAST, /*!< Marker for the last param to be used in for loops  */
@@ -491,6 +492,7 @@ typedef struct observation {
     char flagVal[MAX_FLAGS][MAX_FLAG_LEN];
     int  nFlags;                   
     int  jump[MAX_FLAGS];           /*!< Jump region */
+    double jumpScale[MAX_FLAGS];    /*!< Scale of jump */
     int  obsNjump;                  /*!< Number of jumps for this observation */
     int fdjump[MAX_FLAGS];
     int obsNfdjump;
@@ -616,7 +618,7 @@ typedef struct pulsar {
     int    fitJump[MAX_JUMPS];      /*!< = 1 if fit for jump                                        */
     double jumpValErr[MAX_JUMPS];   /*!< Error on jump                                              */
     char   jumpStr[MAX_JUMPS][MAX_STRLEN]; /*!< String describing jump                              */
-    
+    char   jumpScaled[MAX_JUMPS];   /*!< = 1 if jump is scaled by the flag val                   */
 
     // new parameters for fdjumps
     int    nfdJumps;                  /*!< Number of jumps                                        */
@@ -782,6 +784,8 @@ typedef struct pulsar {
     //Stochastic Parameters
     double TNRedAmp;
     double TNRedGam;
+    double TNRedAmp2;
+    double TNRedGam2;
     int TNRedC;
     double TNRedCoeffs[200];
     double TNRedFLow;
@@ -908,6 +912,14 @@ typedef struct pulsar {
     double ne_sw_ifuncV[MAX_IFUNC];
     double ne_sw_ifuncE[MAX_IFUNC];
     int ne_sw_ifuncN;
+
+    int TNDM_log_freqs;
+    double TNDM_log_factor;
+        int TNChrom_log_freqs;
+    double TNChrom_log_factor;
+    char TNsubtractPoly;
+
+    
 
 } pulsar;
 

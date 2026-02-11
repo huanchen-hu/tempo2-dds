@@ -319,6 +319,18 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
                     psr->fitJump[psr->nJumps]=0;
             }
         }
+        if(strcasecmp(str1, "SCALED")==0){
+            if (nread>2)
+            {
+                sscanf(str3,"%lf",&(psr->jumpVal[psr->nJumps]));
+                if (sscanf(str4,"%d",&v5)==1)
+                {
+                    if (v5!=1) psr->fitJump[psr->nJumps]=0;
+                }
+                else
+                    psr->fitJump[psr->nJumps]=0;
+            }
+        }
         if(strcasecmp(str, "SATJUMP")==0){
             psr->jumpSAT[psr->nJumps]=1; // this is a SAT jump
         }
@@ -661,7 +673,27 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
                 readValue(psr,str,fin,&(psr->param[param_gltd3]),gval-1);
         }
     }
-
+    else if (strstr(str,"NUDOT_AMP_")!=NULL){
+        if (sscanf(str+10,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_nudot_amp].aSize)
+                readValue(psr,str,fin,&(psr->param[param_nudot_amp]),gval-1);
+        }
+    }
+    else if (strstr(str,"NUDOT_TIME_")!=NULL){
+        if (sscanf(str+11,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_nudot_transition_time].aSize)
+                readValue(psr,str,fin,&(psr->param[param_nudot_transition_time]),gval-1);
+        }
+    }
+    else if (strstr(str,"NUDOT_EPOCH_")!=NULL){
+        if (sscanf(str+12,"%d",&gval)==1)
+        {
+            if (gval<psr->param[param_nudot_epoch].aSize)
+                readValue(psr,str,fin,&(psr->param[param_nudot_epoch]),gval-1);
+        }
+    }
     else if  (strstr(str,"EXPEP_")!=NULL || strstr(str,"expep_")!=NULL)
     {
         if (sscanf(str+6,"%d",&gval)==1)
@@ -1703,7 +1735,7 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         ( psr->nTNSECORR )++;
     }
 
-
+    
     /* /---------\
        | TN Noise |
        \---------/ */
@@ -1714,6 +1746,10 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         fscanf(fin,"%lf",&(psr->TNRedGam));
     else if (strcasecmp(str,"TNRedC")==0) /* TempoNest Red noise spectral index */
         fscanf(fin,"%d",&(psr->TNRedC));
+    else if (strcasecmp(str,"TNRedAmp2")==0) /* TempoNest Second Red noise power law amplitude */
+        fscanf(fin,"%lf",&(psr->TNRedAmp2));
+    else if (strcasecmp(str,"TNRedGam2")==0) /* TempoNest Second Red noise spectral index */
+        fscanf(fin,"%lf",&(psr->TNRedGam2));
     else if (strcasecmp(str,"TNRedFLow")==0) /* TempoNest Red noise power law amplitude */
         fscanf(fin,"%lf",&(psr->TNRedFLow));
     else if (strcasecmp(str,"TNRedFLog")==0)
@@ -1730,8 +1766,14 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         fscanf(fin,"%lf",&(psr->TNDMGam));
     else if (strcasecmp(str,"TNDMC")==0) /* TempoNest Red noise spectral index */
         fscanf(fin,"%d",&(psr->TNDMC));
+    else if (strcasecmp(str,"TNDMFLog")==0)
+        fscanf(fin,"%d",&(psr->TNDM_log_freqs));
+    else if (strcasecmp(str,"TNDMFLog_factor")==0)
+        fscanf(fin,"%lf",&(psr->TNDM_log_factor));
     else if(strcasecmp(str,"TNsubtractDM")==0)
         fscanf(fin,"%d",&(psr->TNsubtractDM));
+    else if(strcasecmp(str, "TNsubtractPoly")==0)
+        fscanf(fin,"%d",&(psr->TNsubtractPoly));
     else if (strcasecmp(str,"TN_QpPeriod")==0) /* Quasi-periodic Timing Noise*/
         fscanf(fin,"%lf",&(psr->TN_QpPeriod));
     else if (strcasecmp(str,"TN_QpLam")==0) /* Quasi-periodic Timing Noise*/
@@ -1765,7 +1807,10 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
            fscanf(fin,"%d",&(psr->TNsubtractChrom));
             //fprintf(stderr, "here\n");
         //exit(0);
-    }
+    } else if (strcasecmp(str,"TNChromFLog")==0)
+        fscanf(fin,"%d",&(psr->TNChrom_log_freqs));
+    else if (strcasecmp(str,"TNChromFLog_factor")==0)
+        fscanf(fin,"%lf",&(psr->TNChrom_log_factor));
 
     else if(strcasecmp(str,"RNAMP")==0){ /* compatibility with tempo RN notation */
         printf("\nWARNING: Using tempo RNAMP parameter: setting TNRedC to 100!\n");

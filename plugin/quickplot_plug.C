@@ -104,6 +104,41 @@ void viewModels(pulsar *psr,float x1,float x2,longdouble centreEpoch,int removeM
         int fitFlag,float *x,float *y);
 double lmst2(double mjd,double olong,double *tsid,double *tsid_der);
 
+void update_pulse_number_flag(pulsar *psr, int i);
+
+void update_pulse_number_flag(pulsar *psr, int i) {
+    int flagid=psr[0].obsn[i].nFlags;
+    for(int k=0; k < flagid ; k++){
+        if(strcmp(psr[0].obsn[i].flagID[k],"-pnadd")==0){
+            printf("Removing -pnadd flag\n");
+            for (int kk=k; kk < flagid-1; kk++){
+                strcpy(psr[0].obsn[i].flagID[kk],psr[0].obsn[i].flagID[kk+1]);
+                strcpy(psr[0].obsn[i].flagVal[kk],psr[0].obsn[i].flagVal[kk+1]);
+            }
+            flagid-=1;
+            k-=1;
+        }
+    }
+    psr[0].obsn[i].nFlags = flagid;
+    for(int k=0; k < flagid ; k++){
+        if(strcmp(psr[0].obsn[i].flagID[k],"-pn")==0){
+            flagid=k;
+            break;
+        }
+    }
+    strcpy(psr[0].obsn[i].flagID[flagid],"-pn");
+    sprintf(psr[0].obsn[i].flagVal[flagid],"%lld",psr[0].obsn[i].pulseN-psr[0].obsn[0].pulseN);
+    if (flagid==psr[0].obsn[i].nFlags)
+        psr[0].obsn[i].nFlags++;
+
+    if (i==0) { // if we updated the first one... all the rest need to change because they reference the first one
+        for (i=1;i<psr[0].nobs;i++)
+        {
+            update_pulse_number_flag(psr,i);
+        }
+    }
+}
+
 bool cholmode=false;
 
 /* GLOBAL VARIABLES FOR FITWAVES */
@@ -260,7 +295,7 @@ extern "C" int graphicalInterface(int argc,char *argv[],pulsar *psr,int *npsr)
     float lockx1=0,lockx2=0;
     float locky1=0,locky2=0;
     int   xplot=3;
-    int   yplot=1;
+    int   yplot=2;
     int   publish=0;
     int   menu=3;
     int   nohead=0;
@@ -325,6 +360,8 @@ extern "C" int graphicalInterface(int argc,char *argv[],pulsar *psr,int *npsr)
             psr->obsn[i].averagedmres = (double)psr->obsn[i].residual;
             psr->obsn[i].averagedmerr = (double)psr->obsn[i].toaErr*pow(10.0, -6);
         }
+
+        update_pulse_number_flag(psr,0); // update the pulse number flag for the first observation
 
         if (debugFlag==1) printf("plk: calling doPlot\n");
         int ret = doPlot(psr,*npsr,gr,unitFlag,parFile,timFile,lockx1,lockx2,locky1,locky2,xplot,yplot,
@@ -399,7 +436,7 @@ int doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FIL
 {
 
 
-
+    int plk_mode=1;
     int i,fitFlag=1,exitFlag=0,scale1=0,scale2=psr[0].nobs,count,ncount,j,k;
     longdouble centreEpoch;
 
@@ -1767,34 +1804,34 @@ int doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FIL
                     snprintf(outname,1024,"%s.tim",psr);
                     writeTim(outname,psr,"tempo2");
                     snprintf(outname,1024,"%s_pn.tim",psr);
-                    for (i=0;i<psr[0].nobs;i++)
-                    {
-                        int flagid=psr[0].obsn[i].nFlags;
-                        for(int k=0; k < flagid ; k++){
-                            if(strcmp(psr[0].obsn[i].flagID[k],"-pnadd")==0){
-                                printf("Removing -pnadd flag\n");
-                                for (int kk=k; kk < flagid-1; kk++){
-                                    strcpy(psr[0].obsn[i].flagID[kk],psr[0].obsn[i].flagID[kk+1]);
-                                    strcpy(psr[0].obsn[i].flagVal[kk],psr[0].obsn[i].flagVal[kk+1]);
-                                }
-                                flagid-=1;
-                                k-=1;
-                            }
-                        }
-                        psr[0].obsn[i].nFlags = flagid;
-                        for(int k=0; k < flagid ; k++){
-                            if(strcmp(psr[0].obsn[i].flagID[k],"-pn")==0){
-                                flagid=k;
-                                break;
-                            }
-                        }
-                        //printf("%g %lld\n",(double)psr[0].obsn[i].sat,(psr[0].obsn[i].pulseN - psr[0].obsn[0].pulseN));
-                        strcpy(psr[0].obsn[i].flagID[flagid],"-pn");
-                        sprintf(psr[0].obsn[i].flagVal[flagid],"%lld",psr[0].obsn[i].pulseN-psr[0].obsn[0].pulseN);
-                        if (flagid==psr[0].obsn[i].nFlags)
-                            psr[0].obsn[i].nFlags++;
-                    }
-
+                    // for (i=0;i<psr[0].nobs;i++)
+                    // {
+                    //     int flagid=psr[0].obsn[i].nFlags;
+                    //     for(int k=0; k < flagid ; k++){
+                    //         if(strcmp(psr[0].obsn[i].flagID[k],"-pnadd")==0){
+                    //             printf("Removing -pnadd flag\n");
+                    //             for (int kk=k; kk < flagid-1; kk++){
+                    //                 strcpy(psr[0].obsn[i].flagID[kk],psr[0].obsn[i].flagID[kk+1]);
+                    //                 strcpy(psr[0].obsn[i].flagVal[kk],psr[0].obsn[i].flagVal[kk+1]);
+                    //             }
+                    //             flagid-=1;
+                    //             k-=1;
+                    //         }
+                    //     }
+                    //     psr[0].obsn[i].nFlags = flagid;
+                    //     for(int k=0; k < flagid ; k++){
+                    //         if(strcmp(psr[0].obsn[i].flagID[k],"-pn")==0){
+                    //             flagid=k;
+                    //             break;
+                    //         }
+                    //     }
+                    //     //printf("%g %lld\n",(double)psr[0].obsn[i].sat,(psr[0].obsn[i].pulseN - psr[0].obsn[0].pulseN));
+                    //     strcpy(psr[0].obsn[i].flagID[flagid],"-pn");
+                    //     sprintf(psr[0].obsn[i].flagVal[flagid],"%lld",psr[0].obsn[i].pulseN-psr[0].obsn[0].pulseN);
+                    //     if (flagid==psr[0].obsn[i].nFlags)
+                    //         psr[0].obsn[i].nFlags++;
+                    // }
+                    update_pulse_number_flag(psr, 0);
                     writeTim(outname,psr,"tempo2");
                     snprintf(outname,1024,"%s.par",psr);
                     textOutput(psr,npsr,0,0,0,1,outname);
@@ -1803,33 +1840,8 @@ int doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FIL
                 else if (key=='n') /* Save new .tim file with pulse numbers */
                 {
                     logmsg("Writing pulse numbers to withpn.tim");
-                    for (i=0;i<psr[0].nobs;i++)
-                    {
-                        int flagid=psr[0].obsn[i].nFlags;
-                        for(int k=0; k < flagid ; k++){
-                            if(strcmp(psr[0].obsn[i].flagID[k],"-pnadd")==0){
-                                printf("Removing -pnadd flag\n");
-                                for (int kk=k; kk < flagid-1; kk++){
-                                    strcpy(psr[0].obsn[i].flagID[kk],psr[0].obsn[i].flagID[kk+1]);
-                                    strcpy(psr[0].obsn[i].flagVal[kk],psr[0].obsn[i].flagVal[kk+1]);
-                                }
-                                flagid-=1;
-                                k-=1;
-                            }
-                        }
-                        psr[0].obsn[i].nFlags = flagid;
-                        for(int k=0; k < flagid ; k++){
-                            if(strcmp(psr[0].obsn[i].flagID[k],"-pn")==0){
-                                flagid=k;
-                                break;
-                            }
-                        }
-                        //printf("%g %lld\n",(double)psr[0].obsn[i].sat,(psr[0].obsn[i].pulseN - psr[0].obsn[0].pulseN));
-                        strcpy(psr[0].obsn[i].flagID[flagid],"-pn");
-                        sprintf(psr[0].obsn[i].flagVal[flagid],"%lld",psr[0].obsn[i].pulseN-psr[0].obsn[0].pulseN);
-                        if (flagid==psr[0].obsn[i].nFlags)
-                            psr[0].obsn[i].nFlags++;
-                    }
+                    // updating the zeroth one automatically updates them all by reference.
+                    update_pulse_number_flag(psr,0);
                     writeTim("withpn.tim",psr,"tempo2");
                 }
                 else if (key==19) /* over-write .tim file */
@@ -1842,7 +1854,32 @@ int doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FIL
                     printf("FlagVal = "); scanf("%s",highlightVal[highlightNum++]);
                     getchar(); // Apparently gcc doesn't flush stdin with fflush(stdin)
                 }
-                else if (key=='-' || key=='+') /*  phase jump */
+                else if (plk_mode == 1 && (key=='-' || key=='+' || key=='_' || key=='=')) {
+                    logmsg("Adjusting pulse number");
+                    // This is pulse number adjusting mode
+                    int i= idPoint(psr,x,y,id,count,mouseX,mouseY); /* Identify closest point */
+                    int dpn=-1;
+                    if (key == '-' || key== '_' ){
+                        dpn=1;
+                    }
+
+                    if (key == '-' || key == '=' ) { // just this ToA
+                        psr[0].obsn[i].pulseN += dpn;
+                        update_pulse_number_flag(psr,i);
+                    } else {
+                        // All ToAs after this one
+                        longdouble pn_epoch = psr[0].obsn[i].sat;
+                        for (i=0;i<psr[0].nobs;i++){
+                            if (psr[0].obsn[i].sat >= pn_epoch) {
+                                psr[0].obsn[i].pulseN += dpn;
+                                update_pulse_number_flag(psr,i);
+                            }
+                        }
+                    }
+                    formResiduals(psr,npsr,1);
+
+                }
+                else if (plk_mode != 1 && (key=='-' || key=='+')) /*  phase jump */
                 {
                     // Find closest point to the left
                     int i,iclosest;
