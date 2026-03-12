@@ -541,32 +541,18 @@ void t2Fit(pulsar *psr,unsigned int npsr, const char *covarFuncFile){
 void t2fit_prefit(pulsar* psr, int npsr){
     for (int ipsr=0; ipsr < npsr; ++ipsr){
         /**
-         * Temponest parameters write random crap to the observation struct.
-         * So we should clear them first or it will just do weird stuff.
+         * Reset the TN signal values before the fit.
+         * These get "added to" if we are fitting TN parameters.
          */
-        if (psr[ipsr].TNRedAmp && psr[ipsr].TNRedGam) {
-            for (int iobs = 0; iobs < psr[ipsr].nobs; ++iobs){
-	      //if(psr[0].TNsubtractRed==0)
-	      psr[ipsr].obsn[iobs].TNRedSignal = 0;
-	      psr[ipsr].obsn[iobs].TNRedErr = 0;
-            }
+        for (int iobs = 0; iobs < psr[ipsr].nobs; ++iobs){
+            psr[ipsr].obsn[iobs].TNRedSignal = 0;
+            psr[ipsr].obsn[iobs].TNRedErr = 0;
+            psr[ipsr].obsn[iobs].TNDMSignal =0;
+            psr[ipsr].obsn[iobs].TNDMErr = 0;
+            psr[ipsr].obsn[iobs].TNChromSignal =0;
+            psr[ipsr].obsn[iobs].TNChromErr = 0;
         }
-        if (psr[ipsr].TNDMAmp && psr[ipsr].TNDMGam) {
-            for (int iobs = 0; iobs < psr[ipsr].nobs; ++iobs){
-             	    psr[ipsr].obsn[iobs].TNDMSignal =0;
-		    psr[ipsr].obsn[iobs].TNDMErr = 0;
-            }
-        }
-	if (psr[ipsr].TNChromAmp && psr[ipsr].TNChromGam && psr[ipsr].TNChromIdx) {
-            for (int iobs = 0; iobs < psr[ipsr].nobs; ++iobs){
-             	    psr[ipsr].obsn[iobs].TNChromSignal =0;
-		    psr[ipsr].obsn[iobs].TNChromErr = 0;
-            }
-        }
-
     }
-
-
 }
 
 /**
