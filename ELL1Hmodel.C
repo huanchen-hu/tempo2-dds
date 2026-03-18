@@ -104,7 +104,7 @@ double ELL1Hmodel(pulsar *psr,int p,int ipos,int param){
         mode = 2;
     }else{ 
         if( psr[p].param[param_nharm].paramSet[0] == 1 ){
-            logerr("ELL1H - Cannot use NHARM without H4. Reverting to H3 only.");
+            logerr("ELL1H - Cannot use NHARM without H4. Reverting to H3 only and nharm=3");
         }
         // Have H3, but no H4
         if( psr[p].param[param_stig].paramSet[0] == 1 ){
