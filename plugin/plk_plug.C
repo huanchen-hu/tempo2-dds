@@ -141,8 +141,10 @@ void help(int plk_mode) /* Display help */
         printf("_          add 1 pulse number to all points after this\n");
         printf("=          subtract 1 pulse number from this point\n");
         printf("-          add 1 pulse number to this point\n");
+        printf("H          Add half a phase turn to selected points (via -padd flag)\n");
+        printf("J          Add a third of a phase turn to selected points (via -padd flag)\n");
         printf("<<<<<\n\n");
-    } else{
+    } else {
         printf("+          add positive phase jump\n");
         printf("-          add negative phase jump\n");
     }
@@ -217,11 +219,11 @@ void help(int plk_mode) /* Display help */
     printf("g          change graphics device\n");
     printf("G          change gridding on graphics device\n");
     printf("ctrl-e     highlight points more than 3 sigma from the mean\n");
-    printf("H          highlight points with specific flag using symbols\n");
+    if (plk_mode != 1) printf("H          highlight points with specific flag using symbols\n");
     printf("ctrl-i     highlight points with specific flag using colours\n");
     printf("I          indicate individual observations\n");
     printf("j          draw line between points \n");
-    printf("J          toggle plotting points\n");
+    if (plk_mode != 1) printf("J          toggle plotting points\n");
     printf("L          add label to plot\n");
     printf("ctrl-l     add line to plot\n");
     printf("ctrl-m     toggle menu bar\n");
@@ -1909,7 +1911,7 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
                 }
                 else if (key=='j') /* Draw line between points */
                     join*=-1;
-                else if (key=='J') /* Toggle plotting points */
+                else if (plk_mode != 1 && key=='J') /* Toggle plotting points */
                     plotPoints*=-1;
                 else if (key=='Q') /* Output deleted files for MySQL query */
                 {
@@ -1990,11 +1992,54 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
                     writeTim(timFile[0],psr,"tempo2");
                 else if (key=='t') /* Toggle displaying statistics */
                     statistics*=-1;
-                else if (key=='H') /* Highlight */
+                else if (plk_mode!= 1 && key=='H') /* Highlight */
                 {
                     printf("FlagID = ");  scanf("%s",highlightID[highlightNum]);
                     printf("FlagVal = "); scanf("%s",highlightVal[highlightNum++]);
                     getchar(); // Apparently gcc doesn't flush stdin with fflush(stdin)
+                } else if (plk_mode == 1 && (key=='H' || key=='J')) {
+                    // In pulse number adjustment mode, we use H to add half a turn to selected points.
+                    double phaseadd = 0.5;
+                    if (key=='J') phaseadd = 1/3.0; // Add a third of a turn instead of half a turn if in J mode.
+                    printf("key = %c adding phase %lg via -padd flag\n", key, phaseadd);
+
+                    cpgband(2,0,mouseX,mouseY,&mouseX2,&mouseY2,&key);
+                    float X1 = TKretMin_f(mouseX,mouseX2);
+                    float X2 = TKretMax_f(mouseX,mouseX2);
+                    float Y1 = TKretMin_f(mouseY,mouseY2);
+                    float Y2 = TKretMax_f(mouseY,mouseY2);
+                    
+                    for (i = 0 ; i < count; ++i) {
+                        //	    printf("Here with %d %f %f %d\n",i,x[i],y[i],id[i]);
+                        if ((x[i]>X1) &&
+                                (x[i]<X2) &&
+                                (y[i]>Y1) &&
+                                (y[i]<Y2)) {
+                            // if it has a -padd flag, increase by 0.5, otherwise add a flag with value 0.5
+                            int k;
+                            int hasPaddFlag = 0;
+                            for (k=0;k<psr[0].obsn[id[i]].nFlags;k++) {
+                                if (strcmp(psr[0].obsn[id[i]].flagID[k],"-padd")==0) {
+                                    double newphase = atof(psr[0].obsn[id[i]].flagVal[k])+phaseadd;
+                                    if (newphase >= 1.0) {
+                                        newphase -= 1.0;
+                                        // If the phase wrap causes us to go above 1.0, we need to subtract one from the pulse number to keep things consistent.
+                                        psr[0].obsn[id[i]].pulseN -= 1;
+                                        update_pulse_number_flag(psr,id[i]);
+                                    }
+                                    sprintf(psr[0].obsn[id[i]].flagVal[k],"%.8lg",newphase);
+                                    hasPaddFlag = 1;
+                                    break;
+                                }
+                            }
+                            if (!hasPaddFlag) {
+                                strcpy(psr[0].obsn[id[i]].flagID[psr[0].obsn[id[i]].nFlags],"-padd");
+                                sprintf(psr[0].obsn[id[i]].flagVal[psr[0].obsn[id[i]].nFlags],"%.8lg",phaseadd);
+                                psr[0].obsn[id[i]].nFlags++;
+                            }
+                        }
+                    }
+                    formResiduals(psr,npsr,1);
                 }
                 else if (plk_mode == 1 && (key=='-' || key=='+' || key=='_' || key=='=')) {
                     // This is pulse number adjusting mode
