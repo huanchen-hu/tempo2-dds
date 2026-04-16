@@ -2008,8 +2008,8 @@ void doPlot(pulsar *psr,int npsr,char *gr,double unitFlag, char parFile[][MAX_FI
                         psr[0].obsn[i].pulseN += dpn;
                         update_pulse_number_flag(psr,i);
                     } else {
-                        // All ToAs after this one
-                        longdouble pn_epoch = psr[0].obsn[i].sat;
+                        // All ToAs after this one. Subtract about 1 minute.
+                        longdouble pn_epoch = psr[0].obsn[i].sat - 60.0/SECDAY;
                         for (i=0;i<psr[0].nobs;i++){
                             if (psr[0].obsn[i].sat >= pn_epoch) {
                                 psr[0].obsn[i].pulseN += dpn;
