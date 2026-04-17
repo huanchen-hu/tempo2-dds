@@ -178,7 +178,7 @@ enum label {
     param_glf0d,param_gltd,param_start,param_finish,param_track,param_bp,param_bpp,
     param_tzrmjd,param_tzrfrq,param_fddc,param_fddi,param_fd,param_dr,param_dtheta,param_tspan,
     param_bpjep,param_bpjph,param_bpja1,param_bpjec,param_bpjom,param_bpjpb,
-    param_wave_om,param_kom,param_kin,param_shapmax,param_dth,param_a0,
+    param_wave_om,param_kom,param_kin,param_shapmax,param_shaphof,param_a0,
     param_b0,param_xomdot,param_afac,param_eps1dot,param_eps2dot,param_tres,param_trestn,
     param_wave_dm, param_waveepoch_dm,
     param_dshk,param_ephver,param_daop,param_iperharm,param_dmassplanet, param_dphaseplanet, param_waveepoch,param_ifunc,param_clk_offs,

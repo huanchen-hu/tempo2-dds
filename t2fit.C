@@ -1523,6 +1523,8 @@ void t2fit_fillOneParameterFitInfo(pulsar* psr, param_label fit_param, const int
             ++OUT.nParams;
             break;
         case param_sini:
+        case param_shapmax:
+        case param_shaphof:
         case param_pb:
         case param_fb:
         case param_t0:

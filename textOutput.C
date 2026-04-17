@@ -964,6 +964,21 @@ void textOutput(pulsar *psr,int npsr,double globalParameter,int nGlobal,int outR
                 printf(" (+ %.8f  - %.8f)\n",(double)(si_hi-si),(double)(si-si_lo));
 
             }
+            /* add shaphof */
+            if (psr[p].param[param_shaphof].paramSet[0]==1)
+            {
+                longdouble shaphof;
+                double err,shof_lo,shof_hi;
+
+                shaphof = psr[p].param[param_shaphof].val[0];
+                err  = psr[p].param[param_shaphof].err[0];
+
+                shof_lo = shaphof-err;
+                shof_hi = shaphof+err;
+                printf(" (+ %.8f  - %.8f)\n",(double)(shof_hi),(double)(shof_lo));
+
+            }
+            
             /* mtot derived from m2 and sini */
             if (psr[p].param[param_m2].paramSet[0]==1 && (si!=-2 || psr[p].param[param_sini].paramSet[0]==1))
             {

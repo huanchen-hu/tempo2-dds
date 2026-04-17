@@ -31,7 +31,8 @@
 #include <math.h>
 #include "tempo2.h"
 #include <stdlib.h>
-
+#include <iostream>
+using namespace std;
 /* Timing model      */
 /* Based on bnrydd.f */
 
@@ -41,20 +42,32 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     longdouble pb,k;
     longdouble rad2deg = 180.0/M_PI;
     longdouble SUNMASS = 4.925490947e-6;
-    longdouble m2,tt0,t0,x,ecc,er,xdot,edot,dr,dth,eth,am2,ct;
+    longdouble delta = 0.0;
+    longdouble epsNum = 1.0e-12;   // numerical precision (seconds)
+    longdouble m2,tt0,t0,tt,x,ecc,er,xdot,edot,dr,dth,eth,am2,ct;
     longdouble pbdot,xpbdot,phase,u,du,gamma;
     longdouble orbits;
+    longdouble psi,spsi,cpsi;
     int norbits;
-    longdouble  cu,onemecu,cae,sae,ae,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,anhat,su;
-    longdouble sqr1me2,cume,brace,si,dlogbr,ds,da,a0,b0,d2bar,torb;
-    longdouble csigma,ce,cx,comega,cgamma,cm2,csi;
+    longdouble  cu,onemecu,cae,sae,ae,ae1,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,anhat,su;
+    longdouble sqr1me2,cume,brace,si,dlogbr,ds,da,a0,b0,delta_old,d2bar,torb;
+    longdouble csigma,ce,cx,comega,cgamma,cm2,csi,diff;
     const char *CVS_verNum = "$Id$";
 
     if (displayCVSversion == 1) CVSdisplayVersion("DDmodel.C","DDmodel()",CVS_verNum);
 
 
-    dr = 0.0; /* WHAT SHOULD THESE BE SET TO? */
-    dth = 0.0; 
+    if (psr[p].param[param_dr].paramSet[0] == 1) dr = psr[p].param[param_dr].val[0];
+    else dr = 0.0;
+    
+    if (psr[p].param[param_dtheta].paramSet[0] == 1) dth = psr[p].param[param_dtheta].val[0];
+    else dth = 0.0;
+
+    if (psr[p].param[param_a0].paramSet[0] == 1) a0 = psr[p].param[param_a0].val[0];
+    else a0 = 0.0;
+    
+    if (psr[p].param[param_b0].paramSet[0] == 1) b0 = psr[p].param[param_b0].val[0];
+    else b0 = 0.0;
 
     if (psr[p].param[param_sini].paramSet[0]==1) si = getParameterValue(&psr[p],param_sini,0);
     else si = 0.0;
@@ -69,22 +82,9 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     if (psr[p].param[param_m2].paramSet[0]==1) am2 = psr[p].param[param_m2].val[0];
     else am2 = 0.0;
 
-    pb = psr[p].param[param_pb].val[0]*SECDAY;
-    an = 2.0*M_PI/pb;
-    k = psr[p].param[param_omdot].val[0]/(rad2deg*365.25*86400.0*an);
 
-    m2 = am2*SUNMASS;
-    t0 = psr[p].param[param_t0].val[0];
-    ct = psr[p].obsn[ipos].bbat;    
-
-    tt0 = (ct-t0)*SECDAY;
-
-    if (psr[p].param[param_gamma].paramSet[0]==1)
-        gamma = psr[p].param[param_gamma].val[0];
-    else
-        gamma = 0.0;
-    a0    = 0.0; /* WHAT SHOULD THIS BE SET TO? */
-    b0    = 0.0; /* WHAT SHOULD THIS BE SET TO? */
+    if (psr[p].param[param_gamma].paramSet[0]==1) gamma = psr[p].param[param_gamma].val[0];
+    else gamma = 0.0;
 
     if (psr[p].param[param_om].paramSet[0]==1) omz = psr[p].param[param_om].val[0];
     else omz = 0.0;
@@ -101,11 +101,22 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     if (psr[p].param[param_xpbdot].paramSet[0] == 1) xpbdot = psr[p].param[param_xpbdot].val[0];
     else xpbdot = 0.0;
 
+    pb = psr[p].param[param_pb].val[0]*SECDAY;
+    an = 2.0*M_PI/pb;
+    k = psr[p].param[param_omdot].val[0]/(rad2deg*365.25*86400.0*an);
+
+    m2 = am2*SUNMASS;
+    t0 = psr[p].param[param_t0].val[0];
+    ct = psr[p].obsn[ipos].bbat;    
+
+    tt0 = (ct-t0)*SECDAY;
 
     x = psr[p].param[param_a1].val[0]+xdot*tt0;
     ecc = psr[p].param[param_ecc].val[0]+edot*tt0;
     er = ecc*(1.0+dr);
     eth = ecc*(1.0+dth);
+    
+    sqr1me2=sqrt(1-pow(ecc,2));
 
     if (ecc < 0.0 || ecc > 1.0)
     {
@@ -113,7 +124,11 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
         exit(1);
     }
 
-    orbits = tt0/pb - longdouble(0.5)*(pbdot+xpbdot)*(tt0/pb)*(tt0/pb);
+do {
+    delta_old = delta;
+    tt = tt0-delta;
+    orbits = tt/pb - 0.5*(pbdot+xpbdot)*pow(tt/pb,2);
+    //orbits = tt0/pb - longdouble(0.5)*(pbdot+xpbdot)*(tt0/pb)*(tt0/pb);
     norbits = (int)orbits;
     if (orbits<0.0) norbits--;
     phase=2.0*M_PI*(orbits-norbits);
@@ -122,20 +137,29 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     do {
         du=(phase-(u-ecc*sin(u)))/(1.0-ecc*cos(u));
         u=u+du;
-    } while (fabs(du)>1.0e-12);
+    } while (fabs(du)>1.0e-14);
 
     /*  DD equations 17b, 17c, 29, and 46 through 52 */
     su=sin(u);
     cu=cos(u);
     onemecu=1.0-ecc*cu;
-    cae=(cu-ecc)/onemecu;
-    sae=sqrt(1.0-pow(ecc,2))*su/onemecu;
-    ae=atan2(sae,cae);
-    if(ae<0.0) ae=ae+2.0*M_PI;
-    ae=2.0*M_PI*orbits + ae - phase;
+    cume=cu-ecc;
+    
+    cae=cume/onemecu;
+    sae=sqr1me2*su/onemecu;
+    ae1=atan2(sae,cae);
+    if(ae1<0.0) ae1=ae1+2.0*M_PI;
+    ae = ae1 + norbits*2.0*M_PI;
+    //ae=2.0*M_PI*orbits + ae - phase;
     omega=omz/rad2deg + k*ae;
     sw=sin(omega);
     cw=cos(omega);
+    
+    psi  = omega + ae1; // angle w.r.t. ascending node
+    spsi = sin(psi);
+    cpsi = cos(psi);
+    
+    /* Roemer delay */
     alpha=x*sw;
     beta=x*sqrt(1-pow(eth,2))*cw;
     bg=beta+gamma;
@@ -145,18 +169,22 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     anhat=an/onemecu;
 
     /* DD equations 26, 27, 57: */
-    sqr1me2=sqrt(1-pow(ecc,2));
-    cume=cu-ecc;
     brace=onemecu-si*(sw*cume+sqr1me2*cw*su);
     //  printf("GEORGE: si = %g, brace = %g\n",(double)si,(double)brace);
     dlogbr=log(brace);
     ds=-2*m2*dlogbr;
-    da=a0*(sin(omega+ae) + ecc*sw) + b0*(cos(omega+ae) + ecc*cw);
+    da=a0*(spsi + ecc*sw) + b0*(cpsi + ecc*cw);
+    
+    delta = dre + ds + da;
+    diff = fabs(delta - delta_old);
+    //cerr << "huhu: diff=" << diff << " delta=" << delta << endl; 
 
+  } while (diff > epsNum); //Inversion of timing model by iteration: end of loop              
+    torb=-delta;
+    
     /*  Now compute d2bar, the orbital time correction in DD equation 42. */
-    d2bar=dre*(1-anhat*drep+(pow(anhat,2))*(pow(drep,2) + 0.5*dre*drepp -
-                0.5*ecc*su*dre*drep/onemecu)) + ds + da;
-    torb=-d2bar;
+//    d2bar=dre*(1-anhat*drep+(pow(anhat,2))*(pow(drep,2) + 0.5*dre*drepp - 0.5*ecc*su*dre*drep/onemecu)) + ds + da;
+//    torb=-d2bar;
 
     if (param==-1) return torb;
 
@@ -166,9 +194,11 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
     cx=sw*cume+sqr1me2*cw*su;
     comega=x*(cw*cume-sqr1me2*sw*su);
     cgamma=su;
-    //cdth=-ecc*ecc*x*cw*su/sqr1me2;
     cm2=-2*dlogbr;
-    csi=2*m2*(sw*cume+sqr1me2*cw*su)/brace; 
+    csi=2*m2*(sw*cume+sqr1me2*cw*su)/brace;
+    double cdth;
+    cdth=-ecc*ecc*x*cw*su/sqr1me2;
+     
     if (param==param_pb)
         return -csigma*an*SECDAY*tt0/(pb*SECDAY); 
     else if (param==param_a1)
@@ -193,6 +223,8 @@ longdouble DDmodel(pulsar *psr,int p,int ipos,int param)
         return cm2*SUNMASS;
     else if (param==param_a1dot) /* Also known as xdot */
         return cx*tt0;
+    else if (param==param_dtheta) 
+        return cdth;
 
     return 0.0;
 }
@@ -206,7 +238,7 @@ void updateDD(pulsar *psr,double val,double err,int pos)
         psr->param[param_pb].err[0]  = err/SECDAY;
     }
     else if (pos==param_a1 || pos==param_ecc || pos==param_t0 || pos==param_sini || pos==param_m2
-            || pos == param_gamma || pos==param_edot)
+            || pos == param_gamma || pos == param_dtheta || pos==param_edot)
     {
         psr->param[pos].val[0] += val;
         psr->param[pos].err[0]  = err;

@@ -560,18 +560,18 @@ void initialiseOne (pulsar *psr, int noWarnings, int fullSetup)
     strcpy(psr->param[param_kin].shortlabel[0],"KIN");
     strcpy(psr->param[param_shapmax].label[0],"SHAPMAX"); 
     strcpy(psr->param[param_shapmax].shortlabel[0],"SHAPMAX");
+    strcpy(psr->param[param_shaphof].label[0],"SHAPHOF"); 
+    strcpy(psr->param[param_shaphof].shortlabel[0],"SHAPHOF");
     strcpy(psr->param[param_m2].label[0],"M2");
     strcpy(psr->param[param_m2].shortlabel[0],"M2");
     strcpy(psr->param[param_mtot].label[0],"MTOT");
     strcpy(psr->param[param_mtot].shortlabel[0],"MTOT");
     strcpy(psr->param[param_dr].label[0],"DR"); strcpy(psr->param[param_dr].shortlabel[0],"DR");
-    strcpy(psr->param[param_dth].label[0],"DTH"); strcpy(psr->param[param_dth].shortlabel[0],"DTH");
+    strcpy(psr->param[param_dtheta].label[0],"DTHETA"); strcpy(psr->param[param_dtheta].shortlabel[0],"DTHETA");
     strcpy(psr->param[param_a0].label[0],"A0"); strcpy(psr->param[param_a0].shortlabel[0],"A0");
     strcpy(psr->param[param_b0].label[0],"B0"); strcpy(psr->param[param_b0].shortlabel[0],"B0");
     strcpy(psr->param[param_bp].label[0],"BP"); strcpy(psr->param[param_bp].shortlabel[0],"BP");
     strcpy(psr->param[param_bpp].label[0],"BPP"); strcpy(psr->param[param_bpp].shortlabel[0],"BPP");
-    strcpy(psr->param[param_dtheta].label[0],"DTHETA"); 
-    strcpy(psr->param[param_dtheta].shortlabel[0],"DTHETA");
     strcpy(psr->param[param_sini].label[0],"SINI");
     strcpy(psr->param[param_sini].shortlabel[0],"SINI");
     // Freire & Wex (2010; FW10) parameters:

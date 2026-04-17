@@ -56,10 +56,10 @@ void calcGR(double mtot,double m2,double x,double ecc,double an,double afac,
         double *b0);
 void getKeplerian(pulsar *psr,int com,double *pb,longdouble *t0,double *ecc,
         double *omz,double *x,double *eps1,double *eps2,
-        longdouble *t0asc,double *shapmax,double *kom,double *kin);
+        longdouble *t0asc,double *kom,double *kin);
 void addKeplerianJumps(pulsar *psr,int ipos,double *torb,double *x,double *ecc,
         double *omz,double *pb);
-void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *m2,
+void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *shapmax,double *shaphof,double *m2,
         double *mtot,double *omdot, double *gamma,double *xdot,
 		      double *xpbdot, double *pbdot, double *pb2dot, double *edot,double *pmra,
         double *pmdec,double *dpara, double *dr,double *dth,
@@ -88,18 +88,23 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
     double pb,omdot;
     double rad2deg = 180.0/M_PI;
     double SUNMASS = 4.925490947e-6;
-    longdouble tt0,t0,ct,t0asc;
-    double m2,x,ecc,er,xdot,edot,dr,dth,eth;
+    double delta = 0.0;
+    double delta_old,diff;
+    double epsNum = 1.0e-12;   // numerical precision (seconds)
+    longdouble tt0,t0,tt,ct,t0asc;
+    double m2,x,ecc,er,xdot,edot,dr,dth,cdth,eth;
     double pbdot,pb2dot,xpbdot,phase,u,gamma;
     double orbits;
+    double psi,spsi,cpsi;
     int    norbits;
-    double cu,onemecu=0,cae,sae,ae,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,
+    double cu,onemecu=0,cae,sae,ae,ae1,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,
            anhat,su=0;
-    double sqr1me2,cume,brace,si,dlogbr,ds,da,a0,b0,d2bar,torb;
+    double sqr1me2,cume,brace,braceho,si,dlogbr,ds,da,a0,b0,d2bar,torb;
     double csigma,ce,cx,comega,cgamma,cm2,csi, ckom, ckin;
     double eps1,eps2,eps1dot,eps2dot;
     double ceps1,ceps2;
     double shapmax,cshapmax,sdds;
+    double shaphof,cshaphof,epsLen,epsVel,droe,dRotDefl;
     int    com,com1,com2;
     int    allTerms=1;            /* = 0 to emulate BT model */
     double dpara;
@@ -141,15 +146,15 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
 
     for (com = com1; com < com2;com++)
     {      
-        /* Obtain Keplerian parameters */   
+        /* Obtain Keplerian parameters */    
         getKeplerian(&psr[p],com,&pb,&t0,&ecc,&omz,&x,&eps1,&eps2,&t0asc,
-                &shapmax,&kom,&ki);
+                &kom,&ki);
         /* Now add in the jumps */
         addKeplerianJumps(&psr[p],ipos,&torb,&x,&ecc,&omz,&pb);
         /* Parameters derived from the Keplerian parameters */
         deriveKeplerian(pb,kom,&an,&sin_omega,&cos_omega);
         /* Obtain post-Keplerian parameters */
-        getPostKeplerian(&psr[p],com,an,&si,&m2,&mtot,&omdot,&gamma,&xdot,&xpbdot,
+        getPostKeplerian(&psr[p],com,an,&si,&shapmax,&shaphof,&m2,&mtot,&omdot,&gamma,&xdot,&xpbdot,
 			 &pbdot, &pb2dot,&edot,&pmra,&pmdec,&dpara,&dr,&dth,&a0,&b0,
                 &xomdot,&afac,&eps1dot,&eps2dot,&daop);
 
@@ -201,6 +206,11 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             ecc = 0.0;
         }
 
+
+/*    do {
+        delta_old = delta;
+        tt = tt0-delta;
+        orbits = tt/pb - 0.5*(pbdot+xpbdot)*pow(tt/pb,2) - 1./6.*pb2dot*pow(tt/pb,3);*/
         /* Obtain number of orbits in tt0 */
         orbits  = tt0/pb - 0.5*(pbdot+xpbdot)*pow(tt0/pb,2) - 1./6.*pb2dot*pow(tt0/pb,3);
 
@@ -224,16 +234,27 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             onemecu=1.0-ecc*cu;
             cae=(cu-ecc)/onemecu;                         /* Equation 17b */
             sae=sqrt(1.0-pow(ecc,2))*su/onemecu;          /* Equation 17c */
-            ae=atan2(sae,cae);
+            ae1=atan2(sae,cae);
+            if(ae1<0.0) ae1=ae1+2.0*M_PI;
+            ae = ae1 + norbits*2.0*M_PI;
+            /*ae=atan2(sae,cae);
             if(ae<0.0) ae=ae+2.0*M_PI;
-            ae=2.0*M_PI*orbits + ae - phase;
+            ae=2.0*M_PI*orbits + ae - phase;*/
             omega=omz/rad2deg + omdot*ae;
             sw=sin(omega);
             cw=cos(omega);
+            
+            psi  = omega + ae1; // angle w.r.t. ascending node
+	          spsi = sin(psi);
+	          cpsi = cos(psi);
             //          logdbg("In the middle of DD");
             /* DD equations 26, 27, 57: */
             sqr1me2=sqrt(1-pow(ecc,2));
             cume=cu-ecc;
+            //          logdbg("In the middle of DD");
+            /* DD equations 26, 27, 57: */
+
+            
             //          logdbg("going to Kopeikin");
             /* Update parameters due to proper motion - Kopeikin 1996 */
             /* And annual-orbital and orbital parallax - Kopeikin 1995 */
@@ -273,12 +294,57 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             {
                 sdds  = 1.0 - exp(-1.0*shapmax);
                 brace = onemecu-sdds*(sw*cume+sqr1me2*cw*su);
+                if (psr[p].param[param_shaphof].paramSet[0]==0)
+                {
+                  dlogbr=log(brace);
+                  ds=-2.0*m2*dlogbr;
+                }
+                else if (psr[p].param[param_shaphof].paramSet[0]==1)
+                { /* Higher order corrections related to light propagation (for Double Pulsar only!) */
+                  double ratiompmc = 1.0714;  /* mass ratio mp/mc (= xc/xp) for Double Pulsar */
+                  double xc = x*ratiompmc;
+                  double xR = x+xc;         /* aR*sini/c [s] */
+                  double aR = xR/sdds;        /* aR [s] */
+            
+                  /* Account for lensing contribution to propagation time
+                     simplified version (cf. Zschocke & Klioner 2010, eq. (73)) */
+                  epsLen = 2.0*m2/aR;
+            
+                  /* 1.5pN contribution to Shapiro, i.e. leading order velocity dependence
+                     (Kopeikin & Schäfer 1999, eq. (130)) */
+                  epsVel = an*x/sdds*ratiompmc*ecc*su
+                         - an*x*sdds*ratiompmc/sqr1me2
+                         * (sw*cume + sqr1me2*cw*su)
+                         * (ecc*cw + (cw*cume - sqr1me2*sw*su)/onemecu);
+            
+                  /* Shapiro delay incl. higher order corrections */
+                  braceho =  brace + (epsLen + epsVel) * shaphof;
+                  dlogbr  =  log(braceho);
+                  double dShaho  = -2.0*m2*dlogbr;
+            
+                  /* Bending/lens-rotational delay
+                     - Doroshenko & Kopeikin 1995 approximation,
+                       including retardation to leading order (shift in c's position)
+                     - assumes pulsar spin to be perpendicular to the orbital plane,
+                       i.e. nearly perpendicular to the line-of-sight */
+                  double dfdt     = an*sqr1me2/pow(onemecu,2);
+                  double dpsi     = dfdt*ratiompmc*droe;
+                  double cpsiRet  = cpsi - spsi*dpsi;
+                  double braceRet = brace + epsVel * shaphof;
+                  dRotDefl = 2.0*m2/(2.0*M_PI*psr[p].param[param_f].val[0])/xR * cpsiRet/braceRet;
+            
+                  /* Sum of all the signal propagation contributions */
+                  ds = dShaho + dRotDefl * shaphof;
+                }
             }
             else
+            {
                 brace=onemecu-si*(sw*cume+sqr1me2*cw*su);
-
-            da=a0*(sin(omega+ae) + ecc*sw) + b0*(cos(omega+ae) + 
-                    ecc*cw); /* Equation 27 */
+                dlogbr=log(brace);
+                ds=-2.0*m2*dlogbr;
+            }
+            da=a0*(spsi + ecc*sw) + b0*(cpsi + ecc*cw);
+            //da=a0*(sin(omega+ae) + ecc*sw) + b0*(cos(omega+ae) +  ecc*cw); /* Equation 27 */
 
             /* DD equations 46 to 51 */	  
             alpha=x*sw;                                   /* Equation 46  */
@@ -288,9 +354,6 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             drep=-alpha*su + bg*cu;                       /* Equation 49  */
             drepp=-alpha*cu - bg*su;                      /* Equation 50  */
             anhat=an/onemecu;                             /* Equation 51  */
-
-            dlogbr=log(brace);
-            ds=-2*m2*dlogbr;        /* Equation 26 */
 
         }
         else if (psr[p].param[param_eps1].paramSet[com]==1)  /* ELL1 model */
@@ -439,6 +502,12 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
         }
         // printf("T2: %g %g %g %g %g %g %g\n",brace,phase,a0,b0,dlogbr,ds,m2);
 
+        //delta = dre + allTerms*(ds+da+DAOP+DSR+DOP);
+        //diff = fabs(delta - delta_old);
+        //cerr << "huhu: diff=" << diff << " delta=" << delta << endl; 
+    
+//      } while (diff > epsNum); //Inversion of timing model by iteration: end of loop
+//        torb=-delta;
         /* Now compute d2bar, the orbital time correction in DD equation 42. */
         /* Equation 52 */
         if (onemecu != 0.0)
@@ -455,7 +524,7 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
                 + allTerms*(ds+da+DAOP+DSR+DOP);
         }    
         //      printf("T2a: %g %g %g %g %g drepp=%g ecc=%g su =%g ome =%g ds = %g da = %g %g %g\n",(double)d2bar,(double)dre,(double)anhat,(double)drep,(double)allTerms,(double)drepp,(double)ecc,(double)su,(double)onemecu,(double)ds,(double)da,(double)DAOP,(double)DSR);
-        torb-=d2bar;                                  /* Equation 42  */
+        //torb-=d2bar;                                  /* Equation 42  */
 
         if (param==-1 && com == psr[p].nCompanion-1) return torb;
         else if (param!=-1 && com==arr)
@@ -468,13 +537,23 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
                 cx=sw*cume+sqr1me2*cw*su;                     /* Equation 62d */
                 comega=x*(cw*cume-sqr1me2*sw*su);             /* Equation 62e */
                 cgamma=su;                                    /* Equation 62g */
-                //cdth=-ecc*ecc*x*cw*su/sqr1me2;                /* Equation 62i */
+                cdth=-ecc*ecc*x*cw*su/sqr1me2;                /* Equation 62i */
                 cm2=-2*dlogbr;                                /* Equation 62j */
                 if (psr[p].param[param_shapmax].paramSet[com]==1)
                     cshapmax = 2*m2*(sw*cume+sqr1me2*cw*su)/brace * (1.0-sdds);
+                    if (psr[p].param[param_shaphof].paramSet[0]==0)
+                    {
+                      csi=2.0*m2*(sw*cume+sqr1me2*cw*su)/brace;
+                      cshaphof = 0.0;
+                    }
+                    else if (psr[p].param[param_shaphof].paramSet[0]==1)
+                    {  
+                      csi=2.0*m2*(sw*cume+sqr1me2*cw*su)/braceho;
+                      cshaphof = -2.0*m2/braceho*(epsLen + epsVel) + dRotDefl;
+                    }
                 else if (psr[p].param[param_sini].nLinkTo>0){
                     csi= 2*m2*(sw*cume+sqr1me2*cw*su)*cos(ki)/brace;
-                }
+                } 
                 else
                     csi=2*m2*(sw*cume+sqr1me2*cw*su)/brace;     /* Equation 62k */
             }
@@ -525,6 +604,8 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             else if (param==param_eps2)    return ceps2;
             else if (param==param_tasc)    return -csigma*an*SECDAY;
             else if (param==param_shapmax) return cshapmax;
+            else if (param==param_shaphof) return cshaphof;
+            else if (param==param_dtheta)  return cdth;
             else if (param==param_stig){
                 return( -2.0 * m2 / stig * ( 1.0 - 3.0 * lgf - ( 1.0 - stig * stig ) / fs ) 
                         + 2.0 * m2 * ( 4.0 * sin( TrueAnom ) - stig * cos( 2.0 * TrueAnom ) ) );	    
@@ -585,10 +666,10 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
 
 void updateT2(pulsar *psr,double val,double err,int pos,int arr){
     if (pos==param_pb || pos==param_a1 || pos==param_ecc || pos==param_t0 || 
-            pos==param_sini || pos==param_m2 || pos == param_gamma || 
-            pos==param_eps1 || pos==param_eps2 || pos==param_tasc ||
-            pos == param_bpjph || pos==param_bpja1 || pos==param_bpjec || 
-            pos==param_bpjom || pos == param_bpjpb || pos==param_shapmax || pos==param_h3 || pos==param_h4 || pos==param_stig || pos==param_edot){
+            pos==param_sini || pos==param_m2 || pos == param_gamma || pos == param_dtheta ||
+            pos==param_eps1 || pos==param_eps2 || pos==param_tasc || pos == param_bpjph || 
+            pos==param_bpja1 || pos==param_bpjec || pos==param_bpjom || pos == param_bpjpb || 
+            pos==param_shapmax || pos==param_shaphof || pos==param_h3 || pos==param_h4 || pos==param_stig || pos==param_edot){
         psr->param[pos].val[arr] += val;
         psr->param[pos].err[arr]  = err;
     }
@@ -702,7 +783,7 @@ void calcGR(double mtot,double m2,double x,double ecc,double an,double afac,
 
 void getKeplerian(pulsar *psr,int com,double *pb,longdouble *t0,double *ecc,
         double *omz,double *x,double *eps1,double *eps2,
-        longdouble *t0asc,double *shapmax,double *kom,double *kin)
+        longdouble *t0asc,double *kom,double *kin)
 {
     *pb  = getParameter(psr,param_pb,com)*SECDAY;
     *t0  = getParameter(psr,param_t0,com);
@@ -713,8 +794,6 @@ void getKeplerian(pulsar *psr,int com,double *pb,longdouble *t0,double *ecc,
     *eps1= getParameter(psr,param_eps1,com);
     *eps2= getParameter(psr,param_eps2,com);
     *t0asc = getParameter(psr,param_tasc,com);
-
-    *shapmax = getParameter(psr,param_shapmax,com);
 
     *kom = getParameter(psr,param_kom,com)*M_PI/180.0;
     *kin = getParameter(psr,param_kin,com)*M_PI/180.0;
@@ -761,7 +840,7 @@ void addKeplerianJumps(pulsar *psr,int ipos,double *torb,double *x,double *ecc,
  * eps2dot
  */
 
-void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *m2,
+void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *shapmax,double *shaphof,double *m2,
         double *mtot,double *omdot, double *gamma,double *xdot,
 		      double *xpbdot,double *pbdot, double *pb2dot, double *edot,double *pmra,
         double *pmdec,double *dpara, double *dr,double *dth,
@@ -787,6 +866,9 @@ void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *m2,
         *si = -1.0;
         psr[0].param[param_sini].val[0] = -1.0;
     }
+    
+    *shapmax = getParameter(psr,param_shapmax,com);
+    *shaphof = getParameter(psr,param_shaphof,com);
     *m2      = getParameter(psr,param_m2,com)*SUNMASS;
     *mtot    = getParameter(psr,param_mtot,com)*SUNMASS;
     *omdot   = getParameter(psr,param_omdot,com)/(rad2deg*365.25*SECDAY*an);
@@ -802,7 +884,7 @@ void getPostKeplerian(pulsar *psr,int com,double an,double *si,double *m2,
         * M_PI/(180.0*3600.0e3)/(365.25*86400.0);
     *dpara   = getParameter(psr,param_px,com)*pxConv;
     *dr      = getParameter(psr,param_dr,com);
-    *dth     = getParameter(psr,param_dth,com);
+    *dth     = getParameter(psr,param_dtheta,com);
     *a0      = getParameter(psr,param_a0,com);
     *b0      = getParameter(psr,param_b0,com);
     *xomdot  = getParameter(psr,param_xomdot,com)/(an*rad2deg*365.25*86400.0);

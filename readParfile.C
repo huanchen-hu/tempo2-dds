@@ -2064,19 +2064,41 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
         else if (strcasecmp(str,"GAMMA")==0)
             readValue(psr,str,fin,&(psr->param[param_gamma]),0);
         else if (strcasecmp(str,"DR")==0)
+        {
             readValue(psr,str,fin,&(psr->param[param_dr]),0);
-        else if (strcasecmp(str,"DTH")==0)
-            readValue(psr,str,fin,&(psr->param[param_dth]),0);
+            if (fabs(psr->param[param_dr].val[0]) > 1.0e-3) /* Check units: DO BETTER JOB */
+                psr->param[param_dr].val[0]*=1.0e-6;
+            psr->param[param_dr].prefit[0] = psr->param[param_dr].val[0];
+        }
+        else if (strcasecmp(str,"DTHETA")==0)
+        {
+            readValue(psr,str,fin,&(psr->param[param_dtheta]),0);
+            if (fabs(psr->param[param_dtheta].val[0]) > 1.0e-3) /* Check units: DO BETTER JOB */
+                psr->param[param_dtheta].val[0]*=1.0e-6;
+            psr->param[param_dtheta].prefit[0] = psr->param[param_dtheta].val[0];
+        }
+        //else if (strcasecmp(str,"DTH")==0)
+        //    readValue(psr,str,fin,&(psr->param[param_dth]),0);
         else if (strcasecmp(str,"A0")==0)
+        {
             readValue(psr,str,fin,&(psr->param[param_a0]),0);
+            if (fabs(psr->param[param_a0].val[0]) > 1.0e-3) /* Check units: DO BETTER JOB */
+                psr->param[param_a0].val[0]*=1.0e-6;
+            psr->param[param_a0].prefit[0] = psr->param[param_a0].val[0];
+        }
+        //    readValue(psr,str,fin,&(psr->param[param_a0]),0);
         else if (strcasecmp(str,"B0")==0)
+        {
             readValue(psr,str,fin,&(psr->param[param_b0]),0);
+            if (fabs(psr->param[param_b0].val[0]) > 1.0e-3) /* Check units: DO BETTER JOB */
+                psr->param[param_b0].val[0]*=1.0e-6;
+            psr->param[param_b0].prefit[0] = psr->param[param_b0].val[0];
+        }
+        //    readValue(psr,str,fin,&(psr->param[param_b0]),0);
         else if (strcasecmp(str,"BP")==0)
             readValue(psr,str,fin,&(psr->param[param_bp]),0);
         else if (strcasecmp(str,"BPP")==0)
             readValue(psr,str,fin,&(psr->param[param_bpp]),0);
-        else if (strcasecmp(str,"DTHETA")==0)
-            readValue(psr,str,fin,&(psr->param[param_dtheta]),0);
         else if (strcasecmp(str,"PBDOT")==0)
         {
             readValue(psr,str,fin,&(psr->param[param_pbdot]),0);
@@ -2084,10 +2106,10 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
                 psr->param[param_pbdot].val[0]*=1.0e-12;
             psr->param[param_pbdot].prefit[0] = psr->param[param_pbdot].val[0];
         }
-	else if (strcasecmp(str,"PB2DOT")==0)
+	      else if (strcasecmp(str,"PB2DOT")==0)
         {
             readValue(psr,str,fin,&(psr->param[param_pb2dot]),0);
-	}
+        }
         else if (strcasecmp(str,"XPBDOT")==0)
         {
             readValue(psr,str,fin,&(psr->param[param_xpbdot]),0);
@@ -2154,6 +2176,8 @@ void checkLine(pulsar *psr,char *str,FILE *fin,parameter *elong, parameter *elat
             readValue(psr,str,fin,&(psr->param[param_kin]),0);
         else if (strcasecmp(str,"SHAPMAX")==0)
             readValue(psr,str,fin,&(psr->param[param_shapmax]),0);
+        else if (strcasecmp(str,"SHAPHOF")==0)
+            readValue(psr,str,fin,&(psr->param[param_shaphof]),0);
         else if( strcasecmp( str, "H3" ) == 0 ){
             // h3 harmonic Shapiro delay parameter for DDH model (FW10)
             readValue( psr, str, fin, &( psr->param[param_h3] ), 0 );
@@ -2503,7 +2527,7 @@ void readParfile(pulsar *psr,char parFile[][MAX_FILELEN],char timFile[][MAX_FILE
                     if (str[20]=='1') psr[p].param[param_mtot].fitFlag[0] = 1;
                     if (str[21]=='1') psr[p].param[param_m2].fitFlag[0] = 1;
                     if (str[22]=='1') psr[p].param[param_dtheta].fitFlag[0] = 1;
-                    if (str[22]=='1') psr[p].param[param_dtheta].fitFlag[0] = 1;
+                    //if (str[22]=='1') psr[p].param[param_dtheta].fitFlag[0] = 1;
                     if (str[26]=='1') strcpy(psr[p].binaryModel,"BT");
                     if (str[26]=='2') strcpy(psr[p].binaryModel,"EH");
                     if (str[26]=='3') strcpy(psr[p].binaryModel,"DD");
