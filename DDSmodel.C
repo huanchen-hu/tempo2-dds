@@ -31,30 +31,30 @@
 #include <math.h>
 #include "tempo2.h"
 #include <stdlib.h>
-#include <iostream>
-using namespace std;
+
 /* Timing model       */
 /* Based on bnrydds.f */
 /* Orginally developed by M. Kramer */
 
 double DDSmodel(pulsar *psr,int p,int ipos,int param)
 {
-    double an;
-    double pb,k;
-    double rad2deg = 180.0/M_PI;
-    double SUNMASS = 4.925490947e-6;
-    double delta = 0.0;
-    double epsNum = 1.0e-12;   // numerical precision (seconds)
-    double m2,tt0,t0,tt,x,ecc,er,eth,dr,dth,xdot,edot,am2,ct;
-    double pbdot,xpbdot,phase,u,du,gamma;
-    double orbits;
+    longdouble an;
+    longdouble pb,k;
+    longdouble rad2deg = 180.0/M_PI;
+    longdouble SUNMASS = 4.925490947e-6;
+    longdouble delta = 0.0;
+    longdouble epsNum = 1.0e-12;   // numerical precision (seconds)
+    longdouble m2,tt0,t0,tt,x,ecc,er,eth,dr,dth,xdot,edot,am2;
+    longdouble ct;
+    longdouble pbdot,xpbdot,phase,u,du,gamma;
+    longdouble orbits;
     int norbits;
-    double cu,onemecu,cae,sae,ae,ae1,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,anhat,su;
-    double sqr1me2,cume,dlogbr,ds,da,a0,b0,delta_old,torb,diff;
-    double csigma,ce,cx,comega,cgamma,cm2,csi;
-    double shapmax,cshapmax,sdds,shaphof,cshaphof,brace,braceho;
-    double epsLen,epsVel,dRotDefl;
-    double droe,psi,cpsi,spsi,d2bar;
+    longdouble cu,onemecu,cae,sae,ae,ae1,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,anhat,su;
+    longdouble sqr1me2,cume,dlogbr,ds,da,a0,b0,delta_old,torb,diff;
+    longdouble csigma,ce,cx,comega,cgamma,cm2,csi;
+    longdouble shapmax,cshapmax,sdds,shaphof,cshaphof,brace,braceho;
+    longdouble epsLen,epsVel,dRotDefl;
+    longdouble droe,psi,cpsi,spsi,d2bar;
     const char *CVS_verNum = "$Id$";
 
     if (displayCVSversion == 1) CVSdisplayVersion("DDSmodel.C","DDSmodel()",CVS_verNum);
@@ -111,7 +111,17 @@ double DDSmodel(pulsar *psr,int p,int ipos,int param)
     ct = psr[p].obsn[ipos].bbat;    
 
     tt0 = (ct-t0)*SECDAY;
-    
+
+
+    double Pepoch = psr[p].param[param_pepoch].val[0];
+    double Pdt = (ct - Pepoch)*SECDAY;
+    double Pcurrent = psr[p].param[param_f].val[0]+
+        psr[p].param[param_f].val[1]*Pdt + 0.5*psr[p].param[param_f].val[2]*Pdt*Pdt;
+    if (psr[p].param[param_f].paramSet[3]==1)
+    {
+        Pcurrent += 1.0/6.0*psr[p].param[param_f].val[3]*Pdt*Pdt*Pdt;
+    }
+
     x = psr[p].param[param_a1].val[0]+xdot*tt0;
     ecc = psr[p].param[param_ecc].val[0]+edot*tt0;
     er = ecc*(1.0+dr);
@@ -119,7 +129,20 @@ double DDSmodel(pulsar *psr,int p,int ipos,int param)
     
     sqr1me2=sqrt(1-pow(ecc,2));
 
+    unsigned max_iterations = 100;
+    unsigned current_iteration = 0;
+
 do {
+
+    current_iteration ++;
+
+    if (current_iteration > max_iterations)
+    {
+      logmsg("maximum iterations exceeded while refining orbital phase");
+      delta = (delta+delta_old)/2.0;
+      break;
+    }
+
     delta_old = delta;
     tt = tt0-delta;
     orbits = tt/pb - 0.5*(pbdot+xpbdot)*pow(tt/pb,2);
@@ -202,7 +225,7 @@ do {
       double dpsi     = dfdt*ratiompmc*droe;
       double cpsiRet  = cpsi - spsi*dpsi;
       double braceRet = brace + epsVel * shaphof;
-      dRotDefl = 2.0*m2/(2.0*M_PI*psr[p].param[param_f].val[0])/xR * cpsiRet/braceRet;
+      dRotDefl = 2.0*m2/(2.0*M_PI*Pcurrent)/xR * cpsiRet/braceRet;
 
       /* Sum of all the signal propagation contributions */
       ds = dShaho + dRotDefl * shaphof;
@@ -215,7 +238,9 @@ do {
     delta = dre + ds + da;
     diff = fabs(delta - delta_old);
 
-  } while (diff > epsNum); // Inversion of timing model by iteration: end of loop              
+  } while (diff > epsNum); // Inversion of timing model by iteration: end of loop
+
+
     torb=-delta;
     
     /*  Now compute d2bar, the orbital time correction in DD equation 42. */
@@ -247,8 +272,6 @@ do {
     }
     cshapmax = csi * exp(-1.0*shapmax);
     
-    cerr << "huhu: shaphof=" << shaphof << "huhu: cshaphof=" << cshaphof << endl;
-
     if (param==param_pb)
         return -csigma*an*SECDAY*tt0/(pb*SECDAY); 
     else if (param==param_a1)
