@@ -4427,83 +4427,185 @@ int setPlot(float *x,int count,pulsar *psr,int iobs,double unitFlag,int plotPhas
         if(psr[0].AverageResiduals == 1){x[count] = (float)(psr[0].obsn[iobs].averagebat-centreEpoch);}
         else if(psr[0].AverageDMResiduals == 1){x[count] = (float)(psr[0].obsn[iobs].averagedmbat-centreEpoch); }
     }
-    else if (plot==4)       /* Orbital phase */
-    {
-        double pbdot=0.0;
-        double pb;
-        double t0;
-        double tpb;
-        // RES: Some fixes dealing with FB0 and TASC
-        if (psr[0].param[param_pb].paramSet[0]==0 && psr[0].param[param_fb].paramSet[0]==1) {
-            pb = 1/(psr[0].param[param_fb].val[0]*86400);
-        }
-        else if (psr[0].param[param_pb].paramSet[0]==1) {
-            pb = psr[0].param[param_pb].val[0];
-        }
-        else {
-            printf("WARNING: This is not a binary pulsar\n");
-            x[count]=0.0;
-        }
 
-        if (psr[0].param[param_t0].paramSet[0]==1) {
-            tpb = ( psr[0].obsn[iobs].bat - psr[0].param[param_t0].val[0] ) / pb;
-        }
-        else if (psr[0].param[param_tasc].paramSet[0]==1) {
-            // MJK Jan 2021 - if we have a model with TASC then use the time of sky crossing (TASC) as phase zero.
-            // This is useful as e.g. eclipses/shapero delay occur at a predictable phase in this metric.
-                t0 = psr[0].param[param_tasc].val[0];
-            // The next few lines previously (for a short time in 2020/21) were meant to always reference to T0, but this is not preferred.
-/*            if (psr[0].param[param_om].paramSet[0]==1) {
-                t0 = psr[0].param[param_tasc].val[0] + pb*psr[0].param[param_om].val[0]/(2*M_PI);
-            }
-            else if (psr[0].param[param_eps1].paramSet[0]==1 && psr[0].param[param_eps2].paramSet[0]==1) {
-                t0 = psr[0].param[param_tasc].val[0] + pb*atan2(psr[0].param[param_eps1].val[0], psr[0].param[param_eps2].val[0])/(2*M_PI);
-            }
-            else {
-                t0 = psr[0].param[param_tasc].val[0];
-            }
-            */
-            tpb = ( psr[0].obsn[iobs].bat - t0 ) / pb;
-        }
-        else {
-            printf( "ERROR: Neither T0 nor tasc set...\n" );
-            x[count]=0.0;
-        }
-
-        // RES: replaced the below with the more accurate calculations above
-        /* 
-           if( psr[0].param[param_t0].paramSet[0] ){
-           tpb = ( psr[0].obsn[iobs].bat - psr[0].param[param_t0].val[0] ) / pb; 
-           / ( psr[0].param[param_pb].val[0] );
-           }else if( psr[0].param[param_tasc].paramSet[0] ){
-           tpb = ( psr[0].obsn[iobs].bat - psr[0].param[param_tasc].val[0] ) / pb;
-           / ( psr[0].param[param_pb].val[0] );
-           }else{
-           printf( "ERROR: Neither T0 nor tasc set...\n" );
-           x[count]=0.0;
-           tpb = ( psr[0].obsn[iobs].bat - psr[0].param[param_t0].val[0] ) / pb;
-           / ( psr[0].param[param_pb].val[0] );
-           }*/
-
-        double phase;
-        if (psr[0].param[param_pb].paramSet[0]==0 && psr[0].param[param_fb].paramSet[0]==0)
-        {
-            printf("WARNING: This is not a binary pulsar\n");
-            x[count]=0.0;
-        }
-        else
-        {
-            if (psr[0].param[param_pbdot].paramSet[0] == 1)
-                pbdot = psr[0].param[param_pbdot].val[0];
-
-            /*		phase = 2.0*M_PI*fortranMod(tpb-0.5*pbdot*tpb*tpb,1.0); */
-
-            /* Add 1000000 to make sure that the number is positive?) */
-            phase = fortranMod(tpb+1000000.0,1.0);
-            if (phase < 0.0) phase+=1.0; 
-            x[count] = (float)phase;
-        }
+else if (plot==4)       /* Orbital phase */
+{
+    double pbdot=0.0;
+    double pb;
+    double t0;
+    double tpb;
+    
+    // Declare all variables at the beginning to avoid goto crossing initialization
+    double a1 = 0.0, ecc = 0.0, t0_val = 0.0, om0 = 0.0, omdot = 0.0;
+    int use_t0 = 0;
+    double gamma = 0.0, m2 = 0.0, si = 0.0, a0_val = 0.0, b0_val = 0.0;
+    
+    // --- Get orbital period ---
+    if (psr[0].param[param_pb].paramSet[0]==0 && psr[0].param[param_fb].paramSet[0]==1) {
+        pb = 1/(psr[0].param[param_fb].val[0]*86400);
     }
+    else if (psr[0].param[param_pb].paramSet[0]==1) {
+        pb = psr[0].param[param_pb].val[0];
+    }
+    else {
+        printf("WARNING: This is not a binary pulsar\n");
+        x[count]=0.0;
+        goto calc_done;
+    }
+
+    // --- Get PBDOT ---
+    if (psr[0].param[param_pbdot].paramSet[0] == 1)
+        pbdot = psr[0].param[param_pbdot].val[0] * 1e-12;
+
+    // --- Get other binary parameters ---
+    if (psr[0].param[param_a1].paramSet[0]==1)
+        a1 = psr[0].param[param_a1].val[0];
+    
+    if (psr[0].param[param_ecc].paramSet[0]==1)
+        ecc = psr[0].param[param_ecc].val[0];
+
+    if (psr[0].param[param_t0].paramSet[0]==1) {
+        t0_val = psr[0].param[param_t0].val[0];
+        use_t0 = 1;
+    }
+    else if (psr[0].param[param_tasc].paramSet[0]==1) {
+        t0_val = psr[0].param[param_tasc].val[0];
+        use_t0 = 0;
+    }
+    else {
+        printf("ERROR: Neither T0 nor TASC set...\n");
+        x[count]=0.0;
+        goto calc_done;
+    }
+
+    if (psr[0].param[param_om].paramSet[0]==1)
+        om0 = psr[0].param[param_om].val[0] * M_PI/180.0;
+    
+    if (psr[0].param[param_omdot].paramSet[0]==1)
+        omdot = psr[0].param[param_omdot].val[0] * M_PI/180.0 / 365.25;
+    
+    if (psr[0].param[param_gamma].paramSet[0]==1)
+        gamma = psr[0].param[param_gamma].val[0];
+    if (psr[0].param[param_m2].paramSet[0]==1)
+        m2 = psr[0].param[param_m2].val[0];
+    if (psr[0].param[param_sini].paramSet[0]==1)
+        si = psr[0].param[param_sini].val[0];
+    if (psr[0].param[param_a0].paramSet[0]==1)
+        a0_val = psr[0].param[param_a0].val[0] * 1e-6;
+    if (psr[0].param[param_b0].paramSet[0]==1)
+        b0_val = psr[0].param[param_b0].val[0] * 1e-6;
+
+    // --- Iterative calculation (only for eccentric orbits with T0) ---
+    if (ecc > 1e-10 && use_t0 == 1) {
+        double SUNMASS = 4.925490947e-6;
+        double DAY = 86400.0;
+        double TWOPI = 2.0 * M_PI;
+
+        double k = omdot * pb / TWOPI;
+        double sqr1me2 = sqrt(1.0 - ecc*ecc);
+
+        double tt0 = psr[0].obsn[iobs].bat - t0_val;
+        double delta = 0.0;
+
+        // Iterate 3 times (matching r2a.f)
+        for (int cntr = 0; cntr < 3; cntr++) {
+            double tt = tt0 - delta;
+
+            double orbits = tt/pb - 0.5*pbdot*pow(tt/pb, 2);
+            int norbits = (int)orbits;
+            if (orbits < 0.0) norbits--;
+            double phase = TWOPI * (orbits - norbits);
+
+            // Solve Kepler's equation for eccentric anomaly u
+            double u = phase + ecc*sin(phase)*(1.0 + ecc*cos(phase));
+            double du;
+            do {
+                du = (phase - (u - ecc*sin(u))) / (1.0 - ecc*cos(u));
+                u = u + du;
+            } while (fabs(du) > 1e-14);
+
+            double su = sin(u);
+            double cu = cos(u);
+            double onemecu = 1.0 - ecc*cu;
+            double cume = cu - ecc;
+
+            // Compute true anomaly ae1
+            double ae1 = atan2(sqr1me2*su/onemecu, cume/onemecu);
+            if (ae1 < 0.0) ae1 += TWOPI;
+            double ae = ae1 + norbits*TWOPI;
+
+            // Compute omega (including periastron advance)
+            double omega = om0 + k*ae;
+            double sw = sin(omega);
+            double cw = cos(omega);
+            double spsi = sin(omega + ae1);
+            double cpsi = cos(omega + ae1);
+
+            // Roemer delay
+            double droe = a1 * (sw*cume + sqr1me2*cw*su);
+
+            // Einstein delay
+            double dein = gamma * su;
+
+            // Shapiro delay - use logl() for longdouble precision
+            double brace = onemecu - si*(sw*cume + sqr1me2*cw*su);
+            double dsha = -2.0 * SUNMASS * m2 * logl(fabs(brace));
+
+            // Aberration
+            double dabe = a0_val*(spsi + ecc*sw) + b0_val*(cpsi + ecc*cw);
+
+            // Total delay (days)
+            delta = (droe + dein + dsha + dabe) / DAY;
+        }
+
+        // Final phase calculation using corrected emission time
+        double tt = tt0 - delta;
+        double orbits = tt/pb - 0.5*pbdot*pow(tt/pb, 2);
+        int norbits = (int)orbits;
+        if (orbits < 0.0) norbits--;
+        double phase = TWOPI * (orbits - norbits);
+
+        // Solve Kepler's equation
+        double u = phase + ecc*sin(phase)*(1.0 + ecc*cos(phase));
+        double du;
+        do {
+            du = (phase - (u - ecc*sin(u))) / (1.0 - ecc*cos(u));
+            u = u + du;
+        } while (fabs(du) > 1e-14);
+
+        double su = sin(u);
+        double cu = cos(u);
+        double onemecu = 1.0 - ecc*cu;
+        double cume = cu - ecc;
+
+        double ae1 = atan2(sqr1me2*su/onemecu, cume/onemecu);
+        if (ae1 < 0.0) ae1 += TWOPI;
+        double ae = ae1 + norbits*TWOPI;
+
+        double omega = om0 + k*ae;
+        double psi = omega + ae1;
+        if (psi < 0.0) psi += TWOPI;
+
+        // Return psi as normalized orbital phase [0, 1)
+        x[count] = (float)(psi / TWOPI);
+    }
+    else {
+        // Simplified calculation for circular orbits or TASC
+        double tpb_local;
+        if (psr[0].param[param_t0].paramSet[0]==1) {
+            tpb_local = (psr[0].obsn[iobs].bat - psr[0].param[param_t0].val[0]) / pb;
+        }
+        else {
+            tpb_local = (psr[0].obsn[iobs].bat - t0_val) / pb;
+        }
+        
+        double phase = fortranMod(tpb_local+1000000.0,1.0);
+        if (phase < 0.0) phase+=1.0; 
+        x[count] = (float)phase;
+    }
+    
+    calc_done:;
+}
     else if (plot==5)  /* TOA number */
         x[count] = (float)iobs;
     else if (plot==7)  /* Observing frequency */

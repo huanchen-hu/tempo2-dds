@@ -31,12 +31,11 @@
 #include <math.h>
 #include "tempo2.h"
 #include <stdlib.h>
-
 /* Timing model       */
 /* Based on bnrydds.f */
 /* Orginally developed by M. Kramer */
 
-double DDSmodel(pulsar *psr,int p,int ipos,int param)
+longdouble DDSmodel(pulsar *psr,int p,int ipos,int param)
 {
     longdouble an;
     longdouble pb,k;
@@ -113,9 +112,9 @@ double DDSmodel(pulsar *psr,int p,int ipos,int param)
     tt0 = (ct-t0)*SECDAY;
 
 
-    double Pepoch = psr[p].param[param_pepoch].val[0];
-    double Pdt = (ct - Pepoch)*SECDAY;
-    double Pcurrent = psr[p].param[param_f].val[0]+
+    longdouble Pepoch = psr[p].param[param_pepoch].val[0];
+    longdouble Pdt = (ct - Pepoch)*SECDAY;
+    longdouble Pcurrent = psr[p].param[param_f].val[0]+
         psr[p].param[param_f].val[1]*Pdt + 0.5*psr[p].param[param_f].val[2]*Pdt*Pdt;
     if (psr[p].param[param_f].paramSet[3]==1)
     {
@@ -145,7 +144,7 @@ do {
 
     delta_old = delta;
     tt = tt0-delta;
-    orbits = tt/pb - 0.5*(pbdot+xpbdot)*pow(tt/pb,2);
+    orbits = tt/pb - longdouble(0.5)*(pbdot+xpbdot)*pow(tt/pb,2);
     //orbits = tt0/pb - 0.5*(pbdot+xpbdot)*pow(tt0/pb,2);
     norbits = (int)orbits;
     if (orbits<0.0) norbits--;
@@ -181,10 +180,15 @@ do {
     alpha=x*sw;
     beta=x*sqrt(1-pow(eth,2))*cw;
     bg=beta+gamma;
+    droe=alpha*(cu-er)+beta*su;
+
+    /* Einstein delay*/
+    longdouble dein = gamma*su;
+    /* Old code
     dre=alpha*(cu-er) + bg*su;
     drep=-alpha*su + bg*cu;
     drepp=-alpha*cu - bg*su;
-    anhat=an/onemecu;
+    anhat=an/onemecu; */
 
     /* Shapiro delay -- New additions for DDS model */
     sdds = 1.0-exp(-1.0*shapmax);    /* sidds in tempo */
@@ -195,15 +199,14 @@ do {
       ds=-2.0*m2*dlogbr;
 
    }else{ /* Higher order corrections related to light propagation (for Double Pulsar only!) */
-      double ratiompmc = 1.0714;  /* mass ratio mp/mc (= xc/xp) for Double Pulsar */
-      double xc = x*ratiompmc;
-      double xR = x+xc;         /* aR*sini/c [s] */
-      double aR = xR/sdds;        /* aR [s] */
+      longdouble ratiompmc = 1.0714;  /* mass ratio mp/mc (= xc/xp) for Double Pulsar */
+      longdouble xc = x*ratiompmc;
+      longdouble xR = x+xc;         /* aR*sini/c [s] */
+      longdouble aR = xR/sdds;        /* aR [s] */
 
       /* Account for lensing contribution to propagation time
          simplified version (cf. Zschocke & Klioner 2010, eq. (73)) */
       epsLen = 2.0*m2/aR;
-
       /* 1.5pN contribution to Shapiro, i.e. leading order velocity dependence
          (Kopeikin & Schäfer 1999, eq. (130)) */
       epsVel = an*x/sdds*ratiompmc*ecc*su
@@ -214,17 +217,17 @@ do {
       /* Shapiro delay incl. higher order corrections */
       braceho =  brace + (epsLen + epsVel) * shaphof;
       dlogbr  =  log(braceho);
-      double dShaho  = -2.0*m2*dlogbr;
+      longdouble dShaho  = -2.0*m2*dlogbr;
 
       /* Bending/lens-rotational delay
          - Doroshenko & Kopeikin 1995 approximation,
            including retardation to leading order (shift in c's position)
          - assumes pulsar spin to be perpendicular to the orbital plane,
            i.e. nearly perpendicular to the line-of-sight */
-      double dfdt     = an*sqr1me2/pow(onemecu,2);
-      double dpsi     = dfdt*ratiompmc*droe;
-      double cpsiRet  = cpsi - spsi*dpsi;
-      double braceRet = brace + epsVel * shaphof;
+      longdouble dfdt     = an*sqr1me2/pow(onemecu,2);
+      longdouble dpsi     = dfdt*ratiompmc*droe;
+      longdouble cpsiRet  = cpsi - spsi*dpsi;
+      longdouble braceRet = brace + epsVel * shaphof;
       dRotDefl = 2.0*m2/(2.0*M_PI*Pcurrent)/xR * cpsiRet/braceRet;
 
       /* Sum of all the signal propagation contributions */
@@ -235,7 +238,7 @@ do {
     da=a0*(spsi + ecc*sw) + b0*(cpsi + ecc*cw);
 
     // Sum of delays
-    delta = dre + ds + da;
+    delta = droe + dein + ds + da;
     diff = fabs(delta - delta_old);
 
   } while (diff > epsNum); // Inversion of timing model by iteration: end of loop
@@ -243,7 +246,7 @@ do {
 
     torb=-delta;
     
-    /*  Now compute d2bar, the orbital time correction in DD equation 42. */
+    /* Old code for analytical approach --  Now compute d2bar, the orbital time correction in DD equation 42. */
     //d2bar=dre*(1-anhat*drep+(pow(anhat,2))*(pow(drep,2) + 0.5*dre*drepp - 0.5*ecc*su*dre*drep/onemecu)) + ds + da;
     //torb=-d2bar;
 
@@ -256,7 +259,7 @@ do {
     comega=x*(cw*cume-sqr1me2*sw*su);
     cgamma=su;
     cm2=-2*dlogbr;
-    double cdth;
+    longdouble cdth;
     cdth=-ecc*ecc*x*cw*su/sqr1me2;
     
     /* New additions for the DDS model */
