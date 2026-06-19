@@ -1064,7 +1064,7 @@ extern "C" {
     void updateJV(pulsar *psr,double val,double err,int pos,int arr);
     double DDKmodel(pulsar *psr,int p,int obs,int param);
     void updateDDK(pulsar *psr,double val,double err,int pos);
-    double DDSmodel(pulsar *psr,int p,int obs,int param);
+    longdouble DDSmodel(pulsar *psr,int p,int obs,int param);
     void updateDDS(pulsar *psr,double val,double err,int pos);
     double DDGRmodel(pulsar *psr,int p,int obs,int param);
     void updateDDGR(pulsar *psr,double val,double err,int pos);

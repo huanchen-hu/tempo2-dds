@@ -88,23 +88,19 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
     double pb,omdot;
     double rad2deg = 180.0/M_PI;
     double SUNMASS = 4.925490947e-6;
-    double delta = 0.0;
-    double delta_old,diff;
-    double epsNum = 1.0e-12;   // numerical precision (seconds)
-    longdouble tt0,t0,tt,ct,t0asc;
+    longdouble tt0,t0,ct,t0asc;
     double m2,x,ecc,er,xdot,edot,dr,dth,cdth,eth;
     double pbdot,pb2dot,xpbdot,phase,u,gamma;
     double orbits;
-    double psi,spsi,cpsi;
     int    norbits;
-    double cu,onemecu=0,cae,sae,ae,ae1,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,
+    double cu,onemecu=0,cae,sae,ae,omega,omz,sw,cw,alpha,beta,bg,dre,drep,drepp,
            anhat,su=0;
     double sqr1me2,cume,brace,braceho,si,dlogbr,ds,da,a0,b0,d2bar,torb;
     double csigma,ce,cx,comega,cgamma,cm2,csi, ckom, ckin;
     double eps1,eps2,eps1dot,eps2dot;
     double ceps1,ceps2;
     double shapmax,cshapmax,sdds;
-    double shaphof,cshaphof,epsLen,epsVel,droe,dRotDefl;
+    double shaphof,cshaphof,epsLen,epsVel,droe,cpsi,spsi,dRotDefl;
     int    com,com1,com2;
     int    allTerms=1;            /* = 0 to emulate BT model */
     double dpara;
@@ -206,11 +202,6 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             ecc = 0.0;
         }
 
-
-/*    do {
-        delta_old = delta;
-        tt = tt0-delta;
-        orbits = tt/pb - 0.5*(pbdot+xpbdot)*pow(tt/pb,2) - 1./6.*pb2dot*pow(tt/pb,3);*/
         /* Obtain number of orbits in tt0 */
         orbits  = tt0/pb - 0.5*(pbdot+xpbdot)*pow(tt0/pb,2) - 1./6.*pb2dot*pow(tt0/pb,3);
 
@@ -234,27 +225,16 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
             onemecu=1.0-ecc*cu;
             cae=(cu-ecc)/onemecu;                         /* Equation 17b */
             sae=sqrt(1.0-pow(ecc,2))*su/onemecu;          /* Equation 17c */
-            ae1=atan2(sae,cae);
-            if(ae1<0.0) ae1=ae1+2.0*M_PI;
-            ae = ae1 + norbits*2.0*M_PI;
-            /*ae=atan2(sae,cae);
+            ae=atan2(sae,cae);
             if(ae<0.0) ae=ae+2.0*M_PI;
-            ae=2.0*M_PI*orbits + ae - phase;*/
+            ae=2.0*M_PI*orbits + ae - phase;
             omega=omz/rad2deg + omdot*ae;
             sw=sin(omega);
             cw=cos(omega);
-            
-            psi  = omega + ae1; // angle w.r.t. ascending node
-	          spsi = sin(psi);
-	          cpsi = cos(psi);
             //          logdbg("In the middle of DD");
             /* DD equations 26, 27, 57: */
             sqr1me2=sqrt(1-pow(ecc,2));
             cume=cu-ecc;
-            //          logdbg("In the middle of DD");
-            /* DD equations 26, 27, 57: */
-
-            
             //          logdbg("going to Kopeikin");
             /* Update parameters due to proper motion - Kopeikin 1996 */
             /* And annual-orbital and orbital parallax - Kopeikin 1995 */
@@ -343,8 +323,9 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
                 dlogbr=log(brace);
                 ds=-2.0*m2*dlogbr;
             }
-            da=a0*(spsi + ecc*sw) + b0*(cpsi + ecc*cw);
-            //da=a0*(sin(omega+ae) + ecc*sw) + b0*(cos(omega+ae) +  ecc*cw); /* Equation 27 */
+
+            da=a0*(sin(omega+ae) + ecc*sw) + b0*(cos(omega+ae) + 
+                    ecc*cw); /* Equation 27 */
 
             /* DD equations 46 to 51 */	  
             alpha=x*sw;                                   /* Equation 46  */
@@ -502,12 +483,6 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
         }
         // printf("T2: %g %g %g %g %g %g %g\n",brace,phase,a0,b0,dlogbr,ds,m2);
 
-        //delta = dre + allTerms*(ds+da+DAOP+DSR+DOP);
-        //diff = fabs(delta - delta_old);
-        //cerr << "huhu: diff=" << diff << " delta=" << delta << endl; 
-    
-//      } while (diff > epsNum); //Inversion of timing model by iteration: end of loop
-//        torb=-delta;
         /* Now compute d2bar, the orbital time correction in DD equation 42. */
         /* Equation 52 */
         if (onemecu != 0.0)
@@ -524,7 +499,7 @@ double T2model(pulsar *psr,int p,int ipos,int param,int arr)
                 + allTerms*(ds+da+DAOP+DSR+DOP);
         }    
         //      printf("T2a: %g %g %g %g %g drepp=%g ecc=%g su =%g ome =%g ds = %g da = %g %g %g\n",(double)d2bar,(double)dre,(double)anhat,(double)drep,(double)allTerms,(double)drepp,(double)ecc,(double)su,(double)onemecu,(double)ds,(double)da,(double)DAOP,(double)DSR);
-        //torb-=d2bar;                                  /* Equation 42  */
+        torb-=d2bar;                                  /* Equation 42  */
 
         if (param==-1 && com == psr[p].nCompanion-1) return torb;
         else if (param!=-1 && com==arr)
